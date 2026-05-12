@@ -33,6 +33,7 @@
 		<Unit filename="Makefile" />
 		<Unit filename="include/anain_prj.h" />
 		<Unit filename="include/digio_prj.h" />
+		<Unit filename="include/chademo.h" />
 		<Unit filename="include/errormessage_prj.h" />
 		<Unit filename="include/hwdefs.h" />
 		<Unit filename="include/hwinit.h" />
@@ -89,6 +90,7 @@
 		<Unit filename="libopeninv/src/terminal.cpp" />
 		<Unit filename="libopeninv/src/terminalcommands.cpp" />
 		<Unit filename="linker.ld" />
+		<Unit filename="src/chademo.cpp" />
 		<Unit filename="src/hwinit.cpp" />
 		<Unit filename="src/main.cpp" />
 		<Unit filename="src/mebbms.cpp" />

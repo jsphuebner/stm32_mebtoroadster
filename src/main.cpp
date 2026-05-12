@@ -40,6 +40,7 @@
 #include "sdocommands.h"
 #include "mebbms.h"
 #include "roadsterbmb.h"
+#include "chademo.h"
 
 #define PRINT_JSON 0
 
@@ -157,6 +158,11 @@ extern "C" int main(void)
    canMap = &cm;
    mebBms = &meb;
    roadsterBmb = &roadster;
+
+   //Set fixed CHaDeMo protocol constants and restore CAN mappings if erased
+   Param::SetInt(Param::cdm_version, 1);
+   Param::SetInt(Param::cdm_capacity, 200);
+   ChaDeMo::CheckAndRestoreCanMap(&cm);
 
    //This is all we need to do to set up a terminal on USART3
    Terminal t(USART3, termCmds);

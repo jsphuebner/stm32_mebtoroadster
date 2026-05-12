@@ -47,7 +47,7 @@
    3. Display values
  */
 //Next param id (increase when adding new parameter!): 3
-//Next value Id: 2375
+//Next value Id: 2385
 /*              category     name         unit       min     max     default id */
 #define PARAM_LIST \
     PARAM_ENTRY(CAT_COMM,    canspeed,    CANSPEEDS, 0,      4,      2,      1   ) \
@@ -332,12 +332,23 @@
     VALUE_ENTRY(bmb11_pic_pgc, "bit", 2371) \
     VALUE_ENTRY(bmb11_pic_pgd, "bit", 2372) \
     VALUE_ENTRY(bmb11_alarm_reason, "id", 2373) \
-    VALUE_ENTRY(bmb11_alarm_brick, "id", 2374)
+    VALUE_ENTRY(bmb11_alarm_brick, "id", 2374) \
+    VALUE_ENTRY(cdm_bat_vtg,    "V",   2375) \
+    VALUE_ENTRY(cdm_target_vtg, "V",   2376) \
+    VALUE_ENTRY(cdm_cur_req,    "A",   2377) \
+    VALUE_ENTRY(cdm_soc,        "%",   2378) \
+    VALUE_ENTRY(cdm_enabled,    ONOFF, 2379) \
+    VALUE_ENTRY(cdm_parking,    ONOFF, 2380) \
+    VALUE_ENTRY(cdm_fault,      ONOFF, 2381) \
+    VALUE_ENTRY(cdm_contactor,  ONOFF, 2382) \
+    VALUE_ENTRY(cdm_version,    "",    2383) \
+    VALUE_ENTRY(cdm_capacity,   "",    2384)
 
 
 
 /***** Enum String definitions *****/
 #define OPMODES      "0=Off, 1=Run"
+#define ONOFF        "0=Off, 1=On"
 #define CANSPEEDS    "0=125k, 1=250k, 2=500k, 3=800k, 4=1M"
 #define CANPERIODS   "0=100ms, 1=10ms"
 #define CAT_TEST     "Testing"
