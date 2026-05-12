@@ -214,7 +214,7 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
       else if (maxTempRaw > RawTemperature(60.0f))
       {
          alarmReason = 3;
-         alarmBrick = maxBrick;
+         alarmBrick = maxTherm;
          sheetAlarmOk = 0;
       }
 
