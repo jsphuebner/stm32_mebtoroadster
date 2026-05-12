@@ -65,7 +65,7 @@ static void PrintVoltages(Terminal* term, char *arg)
 {
    (void)arg;
 
-   if (0 == mebBms)
+   if (nullptr == mebBms)
    {
       fprintf(term, "MEB BMS not initialized\r\n");
       return;

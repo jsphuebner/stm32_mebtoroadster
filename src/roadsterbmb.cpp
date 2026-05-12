@@ -46,15 +46,20 @@ static const RoadsterBmb::SheetParams sheetParams[RoadsterBmb::NumSheets] =
 };
 static const int RoadsterBricksPerSheet = 9;
 static const int RoadsterThermistorsPerSheet = 6;
+static const int TotalRoadsterBricks = RoadsterBmb::NumSheets * RoadsterBricksPerSheet;
+static const int MebThermistors = MebBms::NumCells / 12;
+static const int TotalRoadsterThermistors = RoadsterBmb::NumSheets * RoadsterThermistorsPerSheet;
 
-static int SheetStartCell(int sheet)
+static int MappedCellIndex(int sheet, int brick)
 {
-   return sheet < 8 ? sheet * 9 : 72 + (sheet - 8) * 8;
+   const int virtualBrick = sheet * RoadsterBricksPerSheet + brick;
+   return MIN(MebBms::NumCells - 1, (virtualBrick * MebBms::NumCells) / TotalRoadsterBricks);
 }
 
-static int SheetCellCount(int sheet)
+static int MappedThermistorIndex(int sheet, int thermistor)
 {
-   return sheet < 8 ? 9 : 8;
+   const int virtualThermistor = sheet * RoadsterThermistorsPerSheet + thermistor;
+   return MIN(MebThermistors - 1, (virtualThermistor * MebThermistors) / TotalRoadsterThermistors);
 }
 
 static uint32_t BalanceCanId(int sheet)
@@ -102,8 +107,6 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
    for (int sheet = 0; sheet < NumSheets; sheet++)
    {
       const SheetParams& params = sheetParams[sheet];
-      const int startCell = SheetStartCell(sheet);
-      const int cellCount = SheetCellCount(sheet);
 
       if (!alive)
       {
@@ -119,9 +122,10 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
       int sumRaw = 0;
       int bleedMask = 0;
 
-      for (int cell = 0; cell < cellCount; cell++)
+      for (int brick = 0; brick < RoadsterBricksPerSheet; brick++)
       {
-         const float cellVoltage = mebBms.GetCellVoltage(startCell + cell);
+         const int mebCell = MappedCellIndex(sheet, brick);
+         const float cellVoltage = mebBms.GetCellVoltage(mebCell);
 
          if (cellVoltage < 1000)
             continue;
@@ -133,47 +137,51 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
          if (rawVoltage < minRaw)
          {
             minRaw = rawVoltage;
-            minBrick = cell;
+            minBrick = brick;
          }
 
          if (rawVoltage > maxRaw)
          {
             maxRaw = rawVoltage;
-            maxBrick = cell;
+            maxBrick = brick;
          }
 
-         if (mebBms.GetBalanceFlag(startCell + cell))
-            bleedMask |= 1 << cell;
+         if (mebBms.GetBalanceFlag(mebCell))
+            bleedMask |= 1 << brick;
       }
 
-      if (validCount == 0)
+      if (validCount != RoadsterBricksPerSheet)
       {
          ClearSheet(params, 4);
          continue;
       }
 
-      const int startCmu = startCell / 12;
-      const int endCmu = (startCell + cellCount - 1) / 12;
-      float minTemp = 1000.0f;
-      float maxTemp = -1000.0f;
-      float avgTemp = 0;
-      int tempCount = 0;
+      int minTempRaw = 0x7FFFFFFF;
+      int maxTempRaw = -0x7FFFFFFF;
+      int sumTempRaw = 0;
+      int minTherm = 0;
+      int maxTherm = 0;
 
-      for (int cmu = startCmu; cmu <= endCmu; cmu++)
+      for (int therm = 0; therm < RoadsterThermistorsPerSheet; therm++)
       {
-         const float temp = mebBms.GetModuleTemperature(cmu);
-         minTemp = MIN(minTemp, temp);
-         maxTemp = MAX(maxTemp, temp);
-         avgTemp += temp;
-         tempCount++;
+         const int mebThermistor = MappedThermistorIndex(sheet, therm);
+         const int rawTemp = RawTemperature(mebBms.GetModuleTemperature(mebThermistor));
+
+         sumTempRaw += rawTemp;
+
+         if (rawTemp < minTempRaw)
+         {
+            minTempRaw = rawTemp;
+            minTherm = therm;
+         }
+
+         if (rawTemp > maxTempRaw)
+         {
+            maxTempRaw = rawTemp;
+            maxTherm = therm;
+         }
       }
 
-      avgTemp /= tempCount;
-
-      const int avgVoltageRaw = sumRaw / validCount;
-      const int minTempRaw = RawTemperature(minTemp);
-      const int maxTempRaw = RawTemperature(maxTemp);
-      const int avgTempRaw = RawTemperature(avgTemp) * RoadsterThermistorsPerSheet;
       int alarmReason = 0;
       int alarmBrick = 0;
       int sheetAlarm = 1;
@@ -194,7 +202,7 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
          sheetAlarm = 0;
          cellReversal = 0;
       }
-      else if (maxTemp > 60.0f)
+      else if (maxTempRaw > RawTemperature(60.0f))
       {
          alarmReason = 3;
          alarmBrick = maxBrick;
@@ -207,14 +215,14 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
       Param::SetInt(params.balMaxBrick, maxBrick);
       Param::SetInt(params.vMin, minRaw);
       Param::SetInt(params.vMax, maxRaw);
-      Param::SetInt(params.vSumAvg, avgVoltageRaw * RoadsterBricksPerSheet);
+      Param::SetInt(params.vSumAvg, sumRaw);
       Param::SetInt(params.vMinBrick, minBrick);
       Param::SetInt(params.vMaxBrick, maxBrick);
       Param::SetInt(params.tMin, minTempRaw);
       Param::SetInt(params.tMax, maxTempRaw);
-      Param::SetInt(params.tAvg, avgTempRaw);
-      Param::SetInt(params.tMinTherm, 0);
-      Param::SetInt(params.tMaxTherm, 0);
+      Param::SetInt(params.tAvg, sumTempRaw);
+      Param::SetInt(params.tMinTherm, minTherm);
+      Param::SetInt(params.tMaxTherm, maxTherm);
       Param::SetInt(params.bleed, bleedMask);
       Param::SetInt(params.daisyRx, 1);
       Param::SetInt(params.overV, overVoltage);

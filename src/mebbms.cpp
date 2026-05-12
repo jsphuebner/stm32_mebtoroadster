@@ -179,7 +179,7 @@ float MebBms::GetRemainingEnergy(float soc)
    const float nominalVoltage = 3.67f;
    int socIndex = soc / energyCurveGranularity;
    float socFraction = (soc - (socIndex * energyCurveGranularity)) / (float)energyCurveGranularity;
-   socIndex = MIN(socIndex, socCurveTableItems);
+   socIndex = MIN(socIndex, energyCurveTableItems - 1);
    socIndex = MAX(socIndex, 0);
    float energyAtSoc;
 

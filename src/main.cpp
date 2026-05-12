@@ -108,9 +108,9 @@ void Param::Change(Param::PARAM_NUM paramNum)
    switch (paramNum)
    {
    case Param::canspeed:
-      if (0 != bmsCan)
+      if (nullptr != bmsCan)
          bmsCan->SetBaudrate((CanHardware::baudrates)Param::GetInt(Param::canspeed));
-      if (0 != bmbCan)
+      if (nullptr != bmbCan)
          bmbCan->SetBaudrate((CanHardware::baudrates)Param::GetInt(Param::canspeed));
       break;
    default:
