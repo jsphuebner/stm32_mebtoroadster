@@ -47,8 +47,35 @@
    3. Display values
  */
 //Next param id (increase when adding new parameter!): 3
-//Next value Id: 2005
+//Next value Id: 2375
 /*              category     name         unit       min     max     default id */
+#define BMB_SHEET_VALUE_ENTRIES(sheet, base) \
+    VALUE_ENTRY(bmb##sheet##_bal_min_v, "raw",     base + 0 ) \
+    VALUE_ENTRY(bmb##sheet##_bal_min_brick, "id",  base + 1 ) \
+    VALUE_ENTRY(bmb##sheet##_bal_max_v, "raw",     base + 2 ) \
+    VALUE_ENTRY(bmb##sheet##_bal_max_brick, "id",  base + 3 ) \
+    VALUE_ENTRY(bmb##sheet##_v_min, "raw",         base + 4 ) \
+    VALUE_ENTRY(bmb##sheet##_v_max, "raw",         base + 5 ) \
+    VALUE_ENTRY(bmb##sheet##_v_sum_avg, "raw",     base + 6 ) \
+    VALUE_ENTRY(bmb##sheet##_v_min_brick, "id",    base + 7 ) \
+    VALUE_ENTRY(bmb##sheet##_v_max_brick, "id",    base + 8 ) \
+    VALUE_ENTRY(bmb##sheet##_t_min, "raw",         base + 9 ) \
+    VALUE_ENTRY(bmb##sheet##_t_max, "raw",         base + 10) \
+    VALUE_ENTRY(bmb##sheet##_t_avg, "raw",         base + 11) \
+    VALUE_ENTRY(bmb##sheet##_t_min_therm, "id",    base + 12) \
+    VALUE_ENTRY(bmb##sheet##_t_max_therm, "id",    base + 13) \
+    VALUE_ENTRY(bmb##sheet##_bleed, "bitmask",     base + 14) \
+    VALUE_ENTRY(bmb##sheet##_daisy_rx, "bit",      base + 15) \
+    VALUE_ENTRY(bmb##sheet##_over_v, "bit",        base + 16) \
+    VALUE_ENTRY(bmb##sheet##_cell_reversal, "bit", base + 17) \
+    VALUE_ENTRY(bmb##sheet##_can_pwr_ok, "bit",    base + 18) \
+    VALUE_ENTRY(bmb##sheet##_sheet_alarm, "bit",   base + 19) \
+    VALUE_ENTRY(bmb##sheet##_pic_pgm, "bit",       base + 20) \
+    VALUE_ENTRY(bmb##sheet##_pic_pgc, "bit",       base + 21) \
+    VALUE_ENTRY(bmb##sheet##_pic_pgd, "bit",       base + 22) \
+    VALUE_ENTRY(bmb##sheet##_alarm_reason, "id",   base + 23) \
+    VALUE_ENTRY(bmb##sheet##_alarm_brick, "id",    base + 24)
+
 #define PARAM_LIST \
     PARAM_ENTRY(CAT_COMM,    canspeed,    CANSPEEDS, 0,      4,      2,      1   ) \
     PARAM_ENTRY(CAT_COMM,    canperiod,   CANPERIODS,0,      1,      0,      2   ) \
@@ -57,7 +84,18 @@
     VALUE_ENTRY(version,     VERSTR,  2001 ) \
     VALUE_ENTRY(lasterr,     errorListString,  2002 ) \
     VALUE_ENTRY(testain,     "dig",   2003 ) \
-    VALUE_ENTRY(cpuload,     "%",     2004 )
+    VALUE_ENTRY(cpuload,     "%",     2004 ) \
+    BMB_SHEET_VALUE_ENTRIES(1, 2100) \
+    BMB_SHEET_VALUE_ENTRIES(2, 2125) \
+    BMB_SHEET_VALUE_ENTRIES(3, 2150) \
+    BMB_SHEET_VALUE_ENTRIES(4, 2175) \
+    BMB_SHEET_VALUE_ENTRIES(5, 2200) \
+    BMB_SHEET_VALUE_ENTRIES(6, 2225) \
+    BMB_SHEET_VALUE_ENTRIES(7, 2250) \
+    BMB_SHEET_VALUE_ENTRIES(8, 2275) \
+    BMB_SHEET_VALUE_ENTRIES(9, 2300) \
+    BMB_SHEET_VALUE_ENTRIES(10, 2325) \
+    BMB_SHEET_VALUE_ENTRIES(11, 2350)
 
 
 /***** Enum String definitions *****/
@@ -88,4 +126,3 @@ enum _modes
 
 //Generated enum-string for possible errors
 extern const char* errorListString;
-

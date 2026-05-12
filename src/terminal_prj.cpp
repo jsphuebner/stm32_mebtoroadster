@@ -31,12 +31,16 @@
 #include "printf.h"
 #include "param_save.h"
 #include "errormessage.h"
+#include "mebbms.h"
 #include "terminalcommands.h"
 
+static void PrintVoltages(Terminal* term, char *arg);
 static void LoadDefaults(Terminal* term, char *arg);
 static void Help(Terminal* term, char *arg);
 static void PrintSerial(Terminal* term, char *arg);
 static void PrintErrors(Terminal* term, char *arg);
+
+extern MebBms* mebBms;
 
 extern "C" const TERM_CMD termCmds[] =
 {
@@ -49,12 +53,29 @@ extern "C" const TERM_CMD termCmds[] =
   { "save", TerminalCommands::SaveParameters },
   { "load", TerminalCommands::LoadParameters },
   { "reset", TerminalCommands::Reset },
+  { "voltages", PrintVoltages },
   { "defaults", LoadDefaults },
   { "help", Help },
   { "serial", PrintSerial },
   { "errors", PrintErrors },
   { NULL, NULL }
 };
+
+static void PrintVoltages(Terminal* term, char *arg)
+{
+   arg = arg;
+
+   if (0 == mebBms)
+   {
+      fprintf(term, "MEB BMS not initialized\r\n");
+      return;
+   }
+
+   for (int i = 0; i < MebBms::NumCells; i++)
+   {
+      fprintf(term, "%d: %d, %d\r\n", i, mebBms->GetCellVoltage(i), mebBms->GetBalanceFlag(i));
+   }
+}
 
 static void LoadDefaults(Terminal* term, char *arg)
 {
