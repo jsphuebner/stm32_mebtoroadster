@@ -56,8 +56,9 @@ static int MappedCellIndex(int sheet, int brick)
 {
    const int virtualBrick = sheet * RoadsterBricksPerSheet + brick;
    // Spread the 99 virtual Roadster brick slots evenly across the 96 MEB cells.
-   // Some Roadster slots intentionally re-use a neighboring MEB cell so every
-   // emitted sheet still has the original 9-brick layout expected by the DBC.
+   // Integer division deliberately creates a few duplicated source cells, which
+   // is acceptable here because the goal is preserving the original 9-brick
+   // Roadster message layout while staying monotonic across the MEB stack.
    return MIN(MebBms::NumCells - 1, (virtualBrick * MebBms::NumCells) / TotalRoadsterBricks);
 }
 
@@ -65,7 +66,8 @@ static int MappedThermistorIndex(int sheet, int thermistor)
 {
    const int virtualThermistor = sheet * RoadsterThermistorsPerSheet + thermistor;
    // Spread the 66 virtual Roadster thermistor slots evenly across the 8 MEB
-   // module temperatures so each emitted sheet keeps the original 6-therm format.
+   // module temperatures. Integer division intentionally repeats nearby module
+   // temperatures so each emitted sheet keeps the original 6-therm format.
    return MIN(MebThermistors - 1, (virtualThermistor * MebThermistors) / TotalRoadsterThermistors);
 }
 
@@ -263,7 +265,7 @@ void RoadsterBmb::ClearSheet(const SheetParams& params, int alarmReason)
    Param::SetInt(params.bleed, 0);
    Param::SetInt(params.daisyRx, 0);
    Param::SetInt(params.overV, 1);
-   Param::SetInt(params.cellReversal, 0);
+   Param::SetInt(params.cellReversal, 1);
    Param::SetInt(params.canPwrOk, 0);
    Param::SetInt(params.sheetAlarm, 0);
    Param::SetInt(params.picPgm, 1);
