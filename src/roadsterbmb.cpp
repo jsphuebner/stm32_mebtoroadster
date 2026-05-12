@@ -92,14 +92,10 @@ static uint32_t StatusCanId(int sheet)
 }
 
 RoadsterBmb::RoadsterBmb(CanHardware* txCan)
-   : map0(txCan, false), map1(txCan, false), map2(txCan, false), map3(txCan, false), map4(txCan, false), map5(txCan, false)
+   : map0(txCan, false), map1(txCan, false)
 {
    canMaps[0] = &map0;
    canMaps[1] = &map1;
-   canMaps[2] = &map2;
-   canMaps[3] = &map3;
-   canMaps[4] = &map4;
-   canMaps[5] = &map5;
    InitCanMap();
 }
 

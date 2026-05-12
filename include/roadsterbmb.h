@@ -37,7 +37,7 @@ class RoadsterBmb
       };
 
       static const int NumSheets = 11;
-      static const int NumCanMaps = 6;
+      static const int NumCanMaps = 2;
       explicit RoadsterBmb(CanHardware* txCan);
       void Update(MebBms& mebBms, uint32_t time);
       void SendAll();
@@ -45,15 +45,11 @@ class RoadsterBmb
    private:
       CanMap map0;
       CanMap map1;
-      CanMap map2;
-      CanMap map3;
-      CanMap map4;
-      CanMap map5;
       CanMap* canMaps[NumCanMaps];
 
       void ClearSheet(const SheetParams& params, int alarmReason);
       void InitCanMap();
-      CanMap& MapForSheet(int sheet) { return *canMaps[sheet / 2]; }
+      CanMap& MapForSheet(int sheet) { return *canMaps[(sheet * NumCanMaps) / NumSheets]; }
       static int RoundToInt(float value);
       static int RawVoltage(float cellVoltageMv);
       static int RawTemperature(float temperatureDegC);

@@ -8,11 +8,11 @@
 #define OVER_CUR_TIMER     TIM4
 #define OCURMAX            4096
 
-//Address of parameter block in flash
-#define FLASH_PAGE_SIZE 1024
+//Address of parameter/CAN map blocks in flash
+#define FLASH_PAGE_SIZE 2048
 #define PARAM_BLKSIZE FLASH_PAGE_SIZE
-#define PARAM_BLKNUM  1   //last block of 1k
-#define CAN1_BLKNUM   2
+#define PARAM_BLKNUM  1   //last block of 2k
+#define CAN1_BLKNUM   3   //third-to-last block of 2k for flexible CAN map
 #define CAN2_BLKNUM   4
 
 
