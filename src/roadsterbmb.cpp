@@ -1,3 +1,4 @@
+#include <cmath>
 #include <limits.h>
 #include "roadsterbmb.h"
 #include "my_math.h"
@@ -54,12 +55,17 @@ static const int TotalRoadsterThermistors = RoadsterBmb::NumSheets * RoadsterThe
 static int MappedCellIndex(int sheet, int brick)
 {
    const int virtualBrick = sheet * RoadsterBricksPerSheet + brick;
+   // Spread the 99 virtual Roadster brick slots evenly across the 96 MEB cells.
+   // Some Roadster slots intentionally re-use a neighboring MEB cell so every
+   // emitted sheet still has the original 9-brick layout expected by the DBC.
    return MIN(MebBms::NumCells - 1, (virtualBrick * MebBms::NumCells) / TotalRoadsterBricks);
 }
 
 static int MappedThermistorIndex(int sheet, int thermistor)
 {
    const int virtualThermistor = sheet * RoadsterThermistorsPerSheet + thermistor;
+   // Spread the 66 virtual Roadster thermistor slots evenly across the 8 MEB
+   // module temperatures so each emitted sheet keeps the original 6-therm format.
    return MIN(MebThermistors - 1, (virtualThermistor * MebThermistors) / TotalRoadsterThermistors);
 }
 
@@ -216,12 +222,12 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
       Param::SetInt(params.balMaxBrick, maxBrick);
       Param::SetInt(params.vMin, minRaw);
       Param::SetInt(params.vMax, maxRaw);
-      Param::SetInt(params.vSumAvg, sumRaw);
+      Param::SetInt(params.vSumAvg, sumRaw); // DBC signal "sumAvg" is encoded as the 9-brick voltage sum.
       Param::SetInt(params.vMinBrick, minBrick);
       Param::SetInt(params.vMaxBrick, maxBrick);
       Param::SetInt(params.tMin, minTempRaw);
       Param::SetInt(params.tMax, maxTempRaw);
-      Param::SetInt(params.tAvg, sumTempRaw);
+      Param::SetInt(params.tAvg, sumTempRaw); // DBC signal "avgTemp" is encoded as the 6-therm temperature sum.
       Param::SetInt(params.tMinTherm, minTherm);
       Param::SetInt(params.tMaxTherm, maxTherm);
       Param::SetInt(params.bleed, bleedMask);
@@ -311,7 +317,7 @@ void RoadsterBmb::InitCanMap()
 
 int RoadsterBmb::RoundToInt(float value)
 {
-   return value >= 0 ? (int)(value + 0.5f) : (int)(value - 0.5f);
+   return (int)std::round(value);
 }
 
 int RoadsterBmb::RawVoltage(float cellVoltageMv)
