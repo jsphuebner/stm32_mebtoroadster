@@ -63,7 +63,7 @@ extern "C" const TERM_CMD termCmds[] =
 
 static void PrintVoltages(Terminal* term, char *arg)
 {
-   arg = arg;
+   (void)arg;
 
    if (0 == mebBms)
    {

@@ -1,5 +1,5 @@
 /*
- * This file is part of the stm32-... project.
+ * This file is part of the stm32_mebtoroadster project.
  *
  * Copyright (C) 2021 Johannes Huebner <dev@johanneshuebner.com>
  *

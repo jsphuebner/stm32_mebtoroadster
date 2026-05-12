@@ -44,6 +44,8 @@ static const RoadsterBmb::SheetParams sheetParams[RoadsterBmb::NumSheets] =
    SHEET_PARAMS(10),
    SHEET_PARAMS(11),
 };
+static const int RoadsterBricksPerSheet = 9;
+static const int RoadsterThermistorsPerSheet = 6;
 
 static int SheetStartCell(int sheet)
 {
@@ -171,7 +173,7 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
       const int avgVoltageRaw = sumRaw / validCount;
       const int minTempRaw = RawTemperature(minTemp);
       const int maxTempRaw = RawTemperature(maxTemp);
-      const int avgTempRaw = RawTemperature(avgTemp) * 6;
+      const int avgTempRaw = RawTemperature(avgTemp) * RoadsterThermistorsPerSheet;
       int alarmReason = 0;
       int alarmBrick = 0;
       int sheetAlarm = 1;
@@ -205,7 +207,7 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
       Param::SetInt(params.balMaxBrick, maxBrick);
       Param::SetInt(params.vMin, minRaw);
       Param::SetInt(params.vMax, maxRaw);
-      Param::SetInt(params.vSumAvg, avgVoltageRaw * 9);
+      Param::SetInt(params.vSumAvg, avgVoltageRaw * RoadsterBricksPerSheet);
       Param::SetInt(params.vMinBrick, minBrick);
       Param::SetInt(params.vMaxBrick, maxBrick);
       Param::SetInt(params.tMin, minTempRaw);

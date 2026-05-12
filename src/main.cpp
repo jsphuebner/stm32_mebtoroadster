@@ -88,8 +88,8 @@ static void Ms10Task(void)
       ErrorMessage::Post(ERR_TESTERROR);
    }
 
-    //AnaIn::<name>.Get() returns the filtered ADC value
-    //Param::SetInt() sets an integer value.
+   //AnaIn::<name>.Get() returns the filtered ADC value
+   //Param::SetInt() sets an integer value.
    Param::SetInt(Param::testain, AnaIn::test.Get());
    mebBms->Accumulate();
    roadsterBmb->Update(*mebBms, rtc_get_counter_val());
@@ -144,19 +144,19 @@ extern "C" int main(void)
    Stm32Scheduler s(TIM2); //We never exit main so it's ok to put it on stack
    scheduler = &s;
    //Initialize CAN1, including interrupts. Clock must be enabled in clock_setup()
-    Stm32Can c(CAN1, (CanHardware::baudrates)Param::GetInt(Param::canspeed));
-    Stm32Can c2(CAN2, (CanHardware::baudrates)Param::GetInt(Param::canspeed));
-    CanMap cm(&c);
-    CanSdo sdo(&c, &cm);
-    MebBms meb(&c);
-    RoadsterBmb roadster(&c2);
-    sdo.SetNodeId(33); //Set node ID for SDO access e.g. by wifi module
-    //store a pointer for easier access
-    bmsCan = &c;
-    bmbCan = &c2;
-    canMap = &cm;
-    mebBms = &meb;
-    roadsterBmb = &roadster;
+   Stm32Can c(CAN1, (CanHardware::baudrates)Param::GetInt(Param::canspeed));
+   Stm32Can c2(CAN2, (CanHardware::baudrates)Param::GetInt(Param::canspeed));
+   CanMap cm(&c);
+   CanSdo sdo(&c, &cm);
+   MebBms meb(&c);
+   RoadsterBmb roadster(&c2);
+   sdo.SetNodeId(33); //Set node ID for SDO access e.g. by wifi module
+   //store a pointer for easier access
+   bmsCan = &c;
+   bmbCan = &c2;
+   canMap = &cm;
+   mebBms = &meb;
+   roadsterBmb = &roadster;
 
    //This is all we need to do to set up a terminal on USART3
    Terminal t(USART3, termCmds);
