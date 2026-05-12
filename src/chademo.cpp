@@ -45,6 +45,7 @@
 void ChaDeMo::SetupCanMap(CanMap* canMap)
 {
    // 0x100: battery capability message
+   // CHaDeMo spec: max voltage field = (actual target voltage + 40 V)
    canMap->AddSend(Param::cdm_bat_vtg,    0x100, 0,  16, 1.0f);
    canMap->AddSend(Param::cdm_target_vtg, 0x100, 32, 16, 1.0f, 40);
    canMap->AddSend(Param::cdm_capacity,   0x100, 48,  8, 1.0f);
