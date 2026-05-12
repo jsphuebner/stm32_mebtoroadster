@@ -183,14 +183,14 @@ float MebBms::GetRemainingEnergy(float soc)
    socIndex = MAX(socIndex, 0);
    float energyAtSoc;
 
-   if (socIndex < (socCurveTableItems - 1))
+   if (socIndex < (energyCurveTableItems - 1))
    {
       float diff = socToSoe[socIndex + 1] - socToSoe[socIndex];
       energyAtSoc = (float)socToSoe[socIndex] + diff * socFraction;
    }
    else
    {
-      energyAtSoc = socToSoe[socCurveTableItems - 1];
+      energyAtSoc = socToSoe[energyCurveTableItems - 1];
    }
 
    return energyAtSoc * nominalVoltage * NumCells * GetMaximumAmpHours() / 10000;

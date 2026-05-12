@@ -1,3 +1,4 @@
+#include <limits.h>
 #include "roadsterbmb.h"
 #include "my_math.h"
 
@@ -156,8 +157,8 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
          continue;
       }
 
-      int minTempRaw = 0x7FFFFFFF;
-      int maxTempRaw = -0x7FFFFFFF;
+      int minTempRaw = INT_MAX;
+      int maxTempRaw = INT_MIN;
       int sumTempRaw = 0;
       int minTherm = 0;
       int maxTherm = 0;
@@ -184,29 +185,29 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
 
       int alarmReason = 0;
       int alarmBrick = 0;
-      int sheetAlarm = 1;
-      int overVoltage = 1;
-      int cellReversal = 1;
+      int sheetAlarmOk = 1;
+      int overVoltageOk = 1;
+      int cellReversalOk = 1;
 
       if (maxRaw > RawVoltage(4200))
       {
          alarmReason = 5;
          alarmBrick = maxBrick;
-         sheetAlarm = 0;
-         overVoltage = 0;
+         sheetAlarmOk = 0;
+         overVoltageOk = 0;
       }
       else if (minRaw < RawVoltage(2500))
       {
          alarmReason = 4;
          alarmBrick = minBrick;
-         sheetAlarm = 0;
-         cellReversal = 0;
+         sheetAlarmOk = 0;
+         cellReversalOk = 0;
       }
       else if (maxTempRaw > RawTemperature(60.0f))
       {
          alarmReason = 3;
          alarmBrick = maxBrick;
-         sheetAlarm = 0;
+         sheetAlarmOk = 0;
       }
 
       Param::SetInt(params.balMinV, minRaw);
@@ -225,10 +226,10 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
       Param::SetInt(params.tMaxTherm, maxTherm);
       Param::SetInt(params.bleed, bleedMask);
       Param::SetInt(params.daisyRx, 1);
-      Param::SetInt(params.overV, overVoltage);
-      Param::SetInt(params.cellReversal, cellReversal);
+      Param::SetInt(params.overV, overVoltageOk);
+      Param::SetInt(params.cellReversal, cellReversalOk);
       Param::SetInt(params.canPwrOk, 1);
-      Param::SetInt(params.sheetAlarm, sheetAlarm);
+      Param::SetInt(params.sheetAlarm, sheetAlarmOk);
       Param::SetInt(params.picPgm, 1);
       Param::SetInt(params.picPgc, 1);
       Param::SetInt(params.picPgd, 1);
