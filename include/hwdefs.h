@@ -12,7 +12,7 @@
 #define FLASH_PAGE_SIZE 2048
 #define PARAM_BLKSIZE FLASH_PAGE_SIZE
 #define PARAM_BLKNUM  1   //last block of 2k
-#define CAN1_BLKNUM   3   //3rd 2k block counted from flash end, used for flexible CAN map
+#define CAN1_BLKNUM   3   //used as: flash_end - (CAN1_BLKNUM * FLASH_PAGE_SIZE) => 3rd 2k block from flash end
 #define CAN2_BLKNUM   4
 
 
