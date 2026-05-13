@@ -216,7 +216,6 @@ void IsaShunt::Configure(uint32_t data[2])
          if ((1 << channel) & enableMask)
             configData[0] |= 0x200; //cyclic trigger
          can->Send(CAN_ID_CONFIG, configData);
-         //channel++;
       }
       else
       {
