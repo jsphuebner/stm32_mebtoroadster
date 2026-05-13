@@ -57,7 +57,7 @@ void IsaShunt::HandleClear()
 void IsaShunt::ResetCounters()
 {
    //Only reset if something was accumulated
-   if (initialized && GetValue(AS) != 0)
+   if (initialized && currentIntegral != 0)
    {
       uint32_t configData[2] = { 0x0030, 0 };
 
