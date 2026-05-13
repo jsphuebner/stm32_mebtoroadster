@@ -33,8 +33,8 @@ class ChaDeMo : public CanCallback
       static void SetupCanMap(CanMap* canMap);
       /** Check that CHaDeMo mappings are still present; restore them if they were erased */
       static void CheckAndRestoreCanMap(CanMap* canMap);
-      /** Fill runtime CHaDeMo values from BMS and charger telemetry */
-      static void UpdateParams(MebBms& mebBms);
+      /** Fill runtime CHaDeMo values from BMS, SoC source and charger telemetry */
+      static void UpdateParams(MebBms& mebBms, float soc);
       static uint8_t GetChargerMaxCurrent() { return chargerMaxCurrent; }
 
    private:

@@ -52,6 +52,43 @@ static CanMap* canMap;
 static RoadsterBmb* roadsterBmb;
 static IsaShunt* isa;
 MebBms* mebBms;
+static float cdmSoc;
+
+static void CalculateCdmSoc(void)
+{
+   static float estimatedSoc = 0;
+   static int32_t asOffset = 0;
+   static uint16_t noCurrentTicks = 0;
+   static bool initialized = false;
+   const float current = isa->GetValue(IsaShunt::CURRENT) / 1000.0f;
+
+   if (!initialized)
+   {
+      estimatedSoc = MIN(100.0f, MAX(0.0f, mebBms->EstimateSocFromVoltage()));
+      asOffset = isa->GetValue(IsaShunt::AS);
+      initialized = true;
+   }
+
+   if (ABS(current) > 1.0f)
+      noCurrentTicks = 0;
+   else if (noCurrentTicks < UINT16_MAX)
+      noCurrentTicks++;
+
+   if (noCurrentTicks >= 1800) // 3 minutes at 100 ms task rate
+   {
+      estimatedSoc = MIN(100.0f, MAX(0.0f, mebBms->EstimateSocFromVoltage()));
+      asOffset = isa->GetValue(IsaShunt::AS);
+      cdmSoc = estimatedSoc;
+   }
+   else
+   {
+      const int32_t as = isa->GetValue(IsaShunt::AS) - asOffset;
+      const float ah = as / 3600.0f;
+      const float maxAh = MAX(1.0f, mebBms->GetMaximumAmpHours());
+      const float soc = estimatedSoc + (100.0f * ah / maxAh);
+      cdmSoc = MIN(100.0f, MAX(0.0f, soc));
+   }
+}
 
 //sample 100ms task
 static void Ms100Task(void)
@@ -71,6 +108,7 @@ static void Ms100Task(void)
    //This sets a fixed point value WITHOUT calling the parm_Change() function
    Param::SetFloat(Param::cpuload, cpuLoad / 10);
    isa->InitializeAndStartIfNeeded();
+   CalculateCdmSoc();
 
    //If we chose to send CAN messages every 100 ms, do this here.
    if (Param::GetInt(Param::canperiod) == CAN_PERIOD_100MS)
@@ -97,7 +135,7 @@ static void Ms10Task(void)
    Param::SetInt(Param::testain, AnaIn::test.Get());
    mebBms->Accumulate();
    roadsterBmb->Update(*mebBms, rtc_get_counter_val());
-   ChaDeMo::UpdateParams(*mebBms);
+   ChaDeMo::UpdateParams(*mebBms, cdmSoc);
 
    //If we chose to send CAN messages every 10 ms, do this here.
    if (Param::GetInt(Param::canperiod) == CAN_PERIOD_10MS)

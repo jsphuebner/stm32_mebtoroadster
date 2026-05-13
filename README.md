@@ -1,60 +1,46 @@
-# stm32-template
-This project can be a starting point to your own STM32 project. It contains facilities that make software
-development easier and ensures compatibility with the esp8266 web interface.
+# stm32_mebtoroadster
 
-It provides
-- Mostly object oriented syntax
-- A simple, hardware based scheduler for recurring tasks
-- Analog input management, fully independent with DMA
-- Digital I/O management
-- CAN library supporting up to 2 CAN interfaces
-  - hardware filter support
-  - No limitation on number of messages
-  - Automatic mapping from/to parameter module
-  - CAN Open SDO support
-  - Fully interrupt driven
-- Error memory
-- ligthweight fixed point arithmetic
-- string functions to be independent of stdlib
-- Parameter module that interfaces to esp8266 web GUI
-- Saving parameters to flash
-- Serial terminal with custom commands and DMA transfer
-- Mathematical functions (sin/cos, arctan, square root)
-- PI controller class
-- Functions for field oriented control
+Firmware for a Roadster-style battery message emulator driven by MEB BMS data, with CHaDeMo support and ISA shunt integration.
 
-# OTA (over the air upgrade)
-The firmware is linked to leave the 4 kb of flash unused. Those 4 kb are reserved for the bootloader
-that you can find here: https://github.com/jsphuebner/tumanako-inverter-fw-bootloader
-When flashing your device for the first time you must first flash that bootloader. After that you can
-use the ESP8266 module and its web interface to upload your actual application firmware.
-The web interface is here: https://github.com/jsphuebner/esp8266-web-interface
+## High-level architecture
 
-# Compiling
-You will need the arm-none-eabi toolchain: https://developer.arm.com/open-source/gnu-toolchain/gnu-rm/downloads
-On Ubuntu type
+- `MebBms` (CAN1 RX): receives and aggregates MEB cell/module data.
+- `RoadsterBmb` (CAN2 TX): emits Roadster sheet-style BMB messages derived from MEB data.
+- `ChaDeMo` (CAN1 RX/TX via `CanMap`): handles charger telemetry and publishes CHaDeMo status/request frames.
+- `IsaShunt` (CAN1 RX): provides current and ampere-second counters for coulomb-count based SoC tracking.
+- Scheduler:
+  - 10 ms task: fast data updates and CAN map transmission path.
+  - 100 ms task: watchdog, background housekeeping, ISA shunt start-up handling, and SoC source update.
 
-`sudo apt-get install git gcc-arm-none-eabi`
+## CHaDeMo data model
 
-The only external depedencies are libopencm3 and libopeninv. You can download and build these dependencies by typing
+The CHaDeMo-related parameters (`cdm_*`) are filled at runtime:
 
-`make get-deps`
+- `cdm_bat_vtg`: total battery voltage from `MebBms`.
+- `cdm_cur_req`: permitted current = minimum of:
+  - charger max current (from CHaDeMo charger capabilities frame),
+  - battery max charge current (from `MebBms` current limit logic),
+  - user limit (`cdmcurlim`).
+- `cdm_soc`: computed SoC source described below.
+- `cdm_enabled`: set while SoC is below 100%.
+- `cdm_chg_*`: live charger telemetry (max current, output current, output voltage, status).
 
-Now you can compile stm32-<yourname> by typing
+## SoC strategy
 
-`make`
+SoC is calculated from ISA shunt ampere-seconds during current flow (coulomb counting).  
+If there is no significant current flow for 3 minutes, SoC falls back to `MebBms::EstimateSocFromVoltage()`.  
+When falling back, the ISA AS offset is re-aligned so integration restarts cleanly when current flow returns.
 
-And upload it to your board using a JTAG/SWD adapter, the updater.py script or the esp8266 web interface.
+## Build
 
-# Editing
-The repository provides a project file for Code::Blocks, a rather leightweight IDE for cpp code editing.
-For building though, it just executes the above command. Its build system is not actually used.
-Consequently you can use your favority IDE or editor for editing files.
+Requires `arm-none-eabi` toolchain for firmware build:
 
-# Adding classes or modules
-As your firmware grows you probably want to add classes. To do so, put the header file in include/ and the 
-source file in src/ . Then add your module to the object list in Makefile that starts in line 43 with .o
-extension. So if your files are called "mymodule.cpp" and "mymodule.h" you add "mymodule.o" to the list.
+```bash
+make
+```
 
-When changing a header file the build system doesn't always detect this, so you have to "make clean" and
-then make. This is especially important when editing the "*_prj.h" files.
+For quick host-side parameter list validation (no ARM toolchain required):
+
+```bash
+g++ -std=c++11 -Iinclude -Ilibopeninv/include -Ilibopencm3/include -c libopeninv/src/params.cpp
+```
