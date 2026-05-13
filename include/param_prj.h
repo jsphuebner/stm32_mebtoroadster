@@ -46,12 +46,13 @@
    2. Temporary parameters (id = 0)
    3. Display values
  */
-//Next param id (increase when adding new parameter!): 3
-//Next value Id: 2385
+//Next param id (increase when adding new parameter!): 4
+//Next value Id: 2389
 /*              category     name         unit       min     max     default id */
 #define PARAM_LIST \
     PARAM_ENTRY(CAT_COMM,    canspeed,    CANSPEEDS, 0,      4,      2,      1   ) \
     PARAM_ENTRY(CAT_COMM,    canperiod,   CANPERIODS,0,      1,      0,      2   ) \
+    PARAM_ENTRY(CAT_COMM,    cdmcurlim,   "A",       0,      255,    255,    3   ) \
     PARAM_ENTRY(CAT_TEST,    testparam,   "Hz",      -100,   1000,   0,      0   ) \
     VALUE_ENTRY(opmode,      OPMODES, 2000 ) \
     VALUE_ENTRY(version,     VERSTR,  2001 ) \
@@ -338,11 +339,10 @@
     VALUE_ENTRY(cdm_cur_req,    "A",   2377) \
     VALUE_ENTRY(cdm_soc,        "%",   2378) \
     VALUE_ENTRY(cdm_enabled,    ONOFF, 2379) \
-    VALUE_ENTRY(cdm_parking,    ONOFF, 2380) \
-    VALUE_ENTRY(cdm_fault,      ONOFF, 2381) \
-    VALUE_ENTRY(cdm_contactor,  ONOFF, 2382) \
-    VALUE_ENTRY(cdm_version,    "",    2383) \
-    VALUE_ENTRY(cdm_capacity,   "",    2384)
+    VALUE_ENTRY(cdm_chg_max_cur, "A",  2385) \
+    VALUE_ENTRY(cdm_chg_cur,     "A",  2386) \
+    VALUE_ENTRY(cdm_chg_vtg,     "V",  2387) \
+    VALUE_ENTRY(cdm_chg_status,  "",   2388)
 
 
 

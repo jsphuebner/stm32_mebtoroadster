@@ -17,56 +17,67 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "chademo.h"
+#include "mebbms.h"
+#include "my_math.h"
 #include "params.h"
 
-/**
- * Register all CHaDeMo transmit mappings in the supplied CanMap.
- *
- * CAN frame layout (all little-endian / Intel byte order):
- *
- *  0x100 – battery capability
- *    bits  0-15  cdm_bat_vtg     actual battery voltage (V)
- *    bits 32-47  cdm_target_vtg  target voltage + 40 (V)
- *    bits 48-55  cdm_capacity    capacity / SoC denominator (default 200)
- *
- *  0x101 – max voltage compatibility
- *    bits  0-15  cdm_target_vtg  maximum acceptable battery voltage (V)
- *
- *  0x102 – main vehicle status
- *    bits  0-7   cdm_version     CHaDeMo protocol version (default 1)
- *    bits  8-23  cdm_target_vtg  target battery voltage (V)
- *    bits 24-31  cdm_cur_req     charge current request (A)
- *    bit  40     cdm_enabled     charge enable flag
- *    bit  41     cdm_parking     parking position flag
- *    bit  42     cdm_fault       fault flag
- *    bit  43     cdm_contactor   contactor-open flag
- *    bits 48-55  cdm_soc         SoC × 2 (0–100 % → 0–200 in frame)
- */
+uint8_t ChaDeMo::chargerMaxCurrent;
+uint16_t ChaDeMo::chargerOutputVoltage;
+uint8_t ChaDeMo::chargerOutputCurrent;
+uint8_t ChaDeMo::chargerStatus;
+
+ChaDeMo::ChaDeMo(CanHardware* hw)
+{
+   canHardware = hw;
+   canHardware->AddCallback(this);
+   HandleClear();
+}
+
+void ChaDeMo::HandleClear()
+{
+   canHardware->RegisterUserMessage(0x108);
+   canHardware->RegisterUserMessage(0x109);
+   chargerMaxCurrent = 0;
+   chargerOutputVoltage = 0;
+   chargerOutputCurrent = 0;
+   chargerStatus = 0;
+}
+
+void ChaDeMo::HandleRx(uint32_t canId, uint32_t data[2], uint8_t)
+{
+   if (canId == 0x108)
+   {
+      chargerMaxCurrent = data[0] >> 24;
+   }
+   else if (canId == 0x109)
+   {
+      chargerOutputVoltage = data[0] >> 8;
+      chargerOutputCurrent = data[0] >> 24;
+      chargerStatus = (data[1] >> 8) & 0x3F;
+   }
+}
+
 void ChaDeMo::SetupCanMap(CanMap* canMap)
 {
    // 0x100: battery capability message
-   // CHaDeMo spec: max voltage field = (actual target voltage + 40 V)
    canMap->AddSend(Param::cdm_bat_vtg,    0x100, 0,  16, 1.0f);
    canMap->AddSend(Param::cdm_target_vtg, 0x100, 32, 16, 1.0f, 40);
-   canMap->AddSend(Param::cdm_capacity,   0x100, 48,  8, 1.0f);
 
-   // 0x101: max voltage compatibility / charging-time message
-   canMap->AddSend(Param::cdm_target_vtg, 0x101, 0,  16, 1.0f);
+   // 0x101: fixed compatibility message data (0x00FEFF00)
+   canMap->AddSend(Param::cdm_bat_vtg,    0x101, 8,   8, 0.0f, -1);
+   canMap->AddSend(Param::cdm_bat_vtg,    0x101, 16,  8, 0.0f, -2);
 
    // 0x102: main vehicle status message
-   canMap->AddSend(Param::cdm_version,    0x102, 0,   8, 1.0f);
+   canMap->AddSend(Param::cdm_bat_vtg,    0x102, 0,   8, 0.0f, 1);
    canMap->AddSend(Param::cdm_target_vtg, 0x102, 8,  16, 1.0f);
    canMap->AddSend(Param::cdm_cur_req,    0x102, 24,  8, 1.0f);
    canMap->AddSend(Param::cdm_enabled,    0x102, 40,  1, 1.0f);
-   canMap->AddSend(Param::cdm_parking,    0x102, 41,  1, 1.0f);
-   canMap->AddSend(Param::cdm_fault,      0x102, 42,  1, 1.0f);
-   canMap->AddSend(Param::cdm_contactor,  0x102, 43,  1, 1.0f);
    canMap->AddSend(Param::cdm_soc,        0x102, 48,  8, 2.0f);
 }
 
 /**
  * Called once at startup after parm_load(). Checks whether the CHaDeMo send
- * mapping for cdm_enabled is still present on CAN ID 0x102. If the user has
+ * mapping for cdm_target_vtg is still present on CAN ID 0x102. If the user has
  * cleared the CAN map the mapping will be absent, and the full default set is
  * re-established by calling SetupCanMap().
  */
@@ -79,9 +90,30 @@ void ChaDeMo::CheckAndRestoreCanMap(CanMap* canMap)
    int8_t offset;
    bool rx;
 
-   if (!canMap->FindMap(Param::cdm_enabled, canId, start, length, gain, offset, rx)
+   if (!canMap->FindMap(Param::cdm_target_vtg, canId, start, length, gain, offset, rx)
        || canId != 0x102 || rx)
    {
       SetupCanMap(canMap);
    }
+}
+
+void ChaDeMo::UpdateParams(MebBms& mebBms)
+{
+   const float soc = MIN(100.0f, MAX(0.0f, mebBms.EstimateSocFromVoltage()));
+   const float batteryMaxCurrent = mebBms.GetMaximumChargeCurrent(4200.0f);
+   const float userLimitCurrent = Param::GetFloat(Param::cdmcurlim);
+   const float chargerLimitCurrent = chargerMaxCurrent;
+   const float chargeRequest = MIN(255.0f, MAX(0.0f, MIN(chargerLimitCurrent, MIN(batteryMaxCurrent, userLimitCurrent))));
+   const float targetVoltage = MebBms::NumCells * 4.2f;
+
+   Param::SetFloat(Param::cdm_bat_vtg, mebBms.GetTotalVoltage());
+   Param::SetFloat(Param::cdm_target_vtg, targetVoltage);
+   Param::SetFloat(Param::cdm_soc, soc);
+   Param::SetInt(Param::cdm_enabled, soc < 100.0f);
+   Param::SetInt(Param::cdm_cur_req, (int)chargeRequest);
+
+   Param::SetInt(Param::cdm_chg_max_cur, chargerMaxCurrent);
+   Param::SetInt(Param::cdm_chg_cur, chargerOutputCurrent);
+   Param::SetInt(Param::cdm_chg_vtg, chargerOutputVoltage);
+   Param::SetInt(Param::cdm_chg_status, chargerStatus);
 }

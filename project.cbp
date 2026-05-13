@@ -37,6 +37,7 @@
 		<Unit filename="include/errormessage_prj.h" />
 		<Unit filename="include/hwdefs.h" />
 		<Unit filename="include/hwinit.h" />
+		<Unit filename="include/isashunt.h" />
 		<Unit filename="include/mebbms.h" />
 		<Unit filename="include/param_prj.h" />
 		<Unit filename="include/roadsterbmb.h" />
@@ -92,6 +93,7 @@
 		<Unit filename="linker.ld" />
 		<Unit filename="src/chademo.cpp" />
 		<Unit filename="src/hwinit.cpp" />
+		<Unit filename="src/isashunt.cpp" />
 		<Unit filename="src/main.cpp" />
 		<Unit filename="src/mebbms.cpp" />
 		<Unit filename="src/roadsterbmb.cpp" />

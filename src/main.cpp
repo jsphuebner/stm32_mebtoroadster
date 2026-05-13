@@ -41,6 +41,7 @@
 #include "mebbms.h"
 #include "roadsterbmb.h"
 #include "chademo.h"
+#include "isashunt.h"
 
 #define PRINT_JSON 0
 
@@ -49,6 +50,7 @@ static Stm32Can* bmsCan;
 static Stm32Can* bmbCan;
 static CanMap* canMap;
 static RoadsterBmb* roadsterBmb;
+static IsaShunt* isa;
 MebBms* mebBms;
 
 //sample 100ms task
@@ -68,6 +70,7 @@ static void Ms100Task(void)
    float cpuLoad = scheduler->GetCpuLoad();
    //This sets a fixed point value WITHOUT calling the parm_Change() function
    Param::SetFloat(Param::cpuload, cpuLoad / 10);
+   isa->InitializeAndStartIfNeeded();
 
    //If we chose to send CAN messages every 100 ms, do this here.
    if (Param::GetInt(Param::canperiod) == CAN_PERIOD_100MS)
@@ -94,6 +97,7 @@ static void Ms10Task(void)
    Param::SetInt(Param::testain, AnaIn::test.Get());
    mebBms->Accumulate();
    roadsterBmb->Update(*mebBms, rtc_get_counter_val());
+   ChaDeMo::UpdateParams(*mebBms);
 
    //If we chose to send CAN messages every 10 ms, do this here.
    if (Param::GetInt(Param::canperiod) == CAN_PERIOD_10MS)
@@ -150,6 +154,8 @@ extern "C" int main(void)
    CanMap cm(&c);
    CanSdo sdo(&c, &cm);
    MebBms meb(&c);
+   IsaShunt i(&c, IsaShunt::CURRENT | IsaShunt::AS);
+   ChaDeMo chademo(&c);
    RoadsterBmb roadster(&c2);
    sdo.SetNodeId(33); //Set node ID for SDO access e.g. by wifi module
    //store a pointer for easier access
@@ -157,11 +163,10 @@ extern "C" int main(void)
    bmbCan = &c2;
    canMap = &cm;
    mebBms = &meb;
+   isa = &i;
    roadsterBmb = &roadster;
 
-   //Set fixed CHaDeMo protocol constants and restore CAN mappings if erased
-   Param::SetInt(Param::cdm_version, 1);
-   Param::SetInt(Param::cdm_capacity, 200);
+   //Restore default CHaDeMo CAN mappings if user erased them
    ChaDeMo::CheckAndRestoreCanMap(&cm);
 
    //This is all we need to do to set up a terminal on USART3

@@ -19,14 +19,30 @@
 #ifndef CHADEMO_H
 #define CHADEMO_H
 #include "canmap.h"
+#include "canhardware.h"
 
-class ChaDeMo
+class MebBms;
+
+class ChaDeMo : public CanCallback
 {
    public:
+      explicit ChaDeMo(CanHardware* canHardware);
+      void HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc) override;
+      void HandleClear() override;
       /** Register all CHaDeMo send mappings in the given CanMap */
       static void SetupCanMap(CanMap* canMap);
       /** Check that CHaDeMo mappings are still present; restore them if they were erased */
       static void CheckAndRestoreCanMap(CanMap* canMap);
+      /** Fill runtime CHaDeMo values from BMS and charger telemetry */
+      static void UpdateParams(MebBms& mebBms);
+      static uint8_t GetChargerMaxCurrent() { return chargerMaxCurrent; }
+
+   private:
+      CanHardware* canHardware;
+      static uint8_t chargerMaxCurrent;
+      static uint16_t chargerOutputVoltage;
+      static uint8_t chargerOutputCurrent;
+      static uint8_t chargerStatus;
 };
 
 #endif // CHADEMO_H
