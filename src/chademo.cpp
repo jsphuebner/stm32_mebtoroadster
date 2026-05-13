@@ -100,11 +100,12 @@ void ChaDeMo::CheckAndRestoreCanMap(CanMap* canMap)
 void ChaDeMo::UpdateParams(MebBms& mebBms, float soc)
 {
    soc = MIN(100.0f, MAX(0.0f, soc));
-   const float batteryMaxCurrent = mebBms.GetMaximumChargeCurrent(4200.0f);
+   const float cellMaxVoltage = Param::GetFloat(Param::cellmax);
+   const float batteryMaxCurrent = mebBms.GetMaximumChargeCurrent(cellMaxVoltage);
    const float userLimitCurrent = Param::GetFloat(Param::cdmcurlim);
    const float chargerLimitCurrent = chargerMaxCurrent;
    const float chargeRequest = MIN(255.0f, MAX(0.0f, MIN(chargerLimitCurrent, MIN(batteryMaxCurrent, userLimitCurrent))));
-   const float targetVoltage = MebBms::NumCells * 4.2f;
+   const float targetVoltage = MebBms::NumCells * (cellMaxVoltage / 1000.0f);
 
    Param::SetFloat(Param::cdm_bat_vtg, mebBms.GetTotalVoltage());
    Param::SetFloat(Param::cdm_target_vtg, targetVoltage);

@@ -156,6 +156,15 @@ void Param::Change(Param::PARAM_NUM paramNum)
       if (nullptr != bmbCan)
          bmbCan->SetBaudrate((CanHardware::baudrates)Param::GetInt(Param::canspeed));
       break;
+   case Param::ahmax:
+      if (nullptr != mebBms)
+         mebBms->SetMaximumAmpHours(Param::GetFloat(Param::ahmax));
+      break;
+   case Param::chargekp:
+   case Param::chargeki:
+      if (nullptr != mebBms)
+         mebBms->SetControllerGains(Param::GetInt(Param::chargekp), Param::GetInt(Param::chargeki));
+      break;
    default:
       //Handle general parameter changes here. Add paramNum labels for handling specific parameters
       break;
@@ -203,6 +212,8 @@ extern "C" int main(void)
    mebBms = &meb;
    isa = &i;
    roadsterBmb = &roadster;
+   mebBms->SetMaximumAmpHours(Param::GetFloat(Param::ahmax));
+   mebBms->SetControllerGains(Param::GetInt(Param::chargekp), Param::GetInt(Param::chargeki));
 
    //Restore default CHaDeMo CAN mappings if user erased them
    ChaDeMo::CheckAndRestoreCanMap(&cm);

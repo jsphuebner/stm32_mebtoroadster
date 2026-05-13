@@ -46,13 +46,18 @@
    2. Temporary parameters (id = 0)
    3. Display values
  */
-//Next param id (increase when adding new parameter!): 4
+//Next param id (increase when adding new parameter!): 9
 //Next value Id: 2389
 /*              category     name         unit       min     max     default id */
 #define PARAM_LIST \
     PARAM_ENTRY(CAT_COMM,    canspeed,    CANSPEEDS, 0,      4,      2,      1   ) \
     PARAM_ENTRY(CAT_COMM,    canperiod,   CANPERIODS,0,      1,      0,      2   ) \
     PARAM_ENTRY(CAT_COMM,    cdmcurlim,   "A",       0,      255,    255,    3   ) \
+    PARAM_ENTRY(CAT_BMS,     cellmin,     "mV",      2500,   3600,   3380,   4   ) \
+    PARAM_ENTRY(CAT_BMS,     cellmax,     "mV",      4000,   4300,   4200,   5   ) \
+    PARAM_ENTRY(CAT_BMS,     ahmax,       "Ah",      10,     200,    148,    6   ) \
+    PARAM_ENTRY(CAT_BMS,     chargekp,    "",        0,      200,    3,      7   ) \
+    PARAM_ENTRY(CAT_BMS,     chargeki,    "",        0,      200,    3,      8   ) \
     PARAM_ENTRY(CAT_TEST,    testparam,   "Hz",      -100,   1000,   0,      0   ) \
     VALUE_ENTRY(opmode,      OPMODES, 2000 ) \
     VALUE_ENTRY(version,     VERSTR,  2001 ) \
@@ -353,6 +358,7 @@
 #define CANPERIODS   "0=100ms, 1=10ms"
 #define CAT_TEST     "Testing"
 #define CAT_COMM     "Communication"
+#define CAT_BMS      "BMS"
 
 #define VERSTR STRINGIFY(4=VER-name)
 
