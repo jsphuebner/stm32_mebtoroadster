@@ -91,12 +91,33 @@ static uint32_t StatusCanId(int sheet)
    return 0x8E + (sheet * 8);
 }
 
+struct VersionFrame
+{
+   uint32_t canId;
+   uint8_t len;
+   uint8_t data[8];
+};
+
+static const uint32_t IdentificationRequestId = 0x000;
+static const uint32_t VmsHandshakeId = 0x380;
+static const uint32_t VersionBroadcastPeriod = 60;
+static const uint32_t StartupHandshakeDelay = 2;
+static const VersionFrame versionFrames[] =
+{
+   { 0x601, 8, { 0x42, 0x53, 0x4D, 0x20, 0x52, 0x30, 0x00, 0x40 } },
+   { 0x609, 8, { 0x43, 0x53, 0x42, 0x2D, 0x52, 0x32, 0x00, 0x41 } },
+   { 0x701, 8, { 0x56, 0x49, 0x4F, 0x2D, 0x52, 0x34, 0x00, 0x60 } },
+};
+
 RoadsterBmb::RoadsterBmb(CanHardware* txCan)
-   : map0(txCan, false), map1(txCan, false)
+   : canHardware(txCan), map0(txCan, false), map1(txCan, false), handshakeState(HandshakeStartup),
+     lastVersionBroadcast(0), startupTime(0), identificationPending(false)
 {
    canMaps[0] = &map0;
    canMaps[1] = &map1;
+   canHardware->AddCallback(this);
    InitCanMap();
+   HandleClear();
 }
 
 void RoadsterBmb::SendAll()
@@ -105,8 +126,38 @@ void RoadsterBmb::SendAll()
       canMaps[i]->SendAll();
 }
 
+void RoadsterBmb::HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc)
+{
+   const uint8_t* bytes = reinterpret_cast<uint8_t*>(data);
+
+   if (canId == IdentificationRequestId && dlc >= 2 && bytes[0] == 0x00 && bytes[1] == 0x04)
+   {
+      identificationPending = true;
+   }
+   else if (canId == VmsHandshakeId && dlc >= 6 &&
+            bytes[0] == 0x00 && bytes[1] == 0x02 && bytes[2] == 0x08 &&
+            bytes[3] == 0x00 && bytes[4] == 0x00 && bytes[5] == 0x10)
+   {
+      identificationPending = true;
+   }
+}
+
+void RoadsterBmb::HandleClear()
+{
+   canHardware->RegisterUserMessage(IdentificationRequestId);
+   canHardware->RegisterUserMessage(VmsHandshakeId);
+}
+
 void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
 {
+   if (handshakeState == HandshakeStartup && startupTime == 0)
+      startupTime = time;
+
+   const bool sendIdentification = identificationPending ||
+                                   (handshakeState == HandshakeStartup && (time - startupTime) >= StartupHandshakeDelay);
+   const bool sendVersionOnly = handshakeState == HandshakeIdle && !sendIdentification &&
+                                ((time - lastVersionBroadcast) >= VersionBroadcastPeriod);
+
    const bool alive = mebBms.Alive(time);
 
    for (int sheet = 0; sheet < NumSheets; sheet++)
@@ -239,6 +290,38 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
       Param::SetInt(params.picPgd, 1);
       Param::SetInt(params.alarmReason, alarmReason);
       Param::SetInt(params.alarmBrick, alarmBrick);
+   }
+
+   if (sendIdentification)
+   {
+      SendIdentification();
+      lastVersionBroadcast = time;
+      identificationPending = false;
+      handshakeState = HandshakeIdle;
+   }
+   else if (sendVersionOnly)
+   {
+      SendVersionFrames();
+      lastVersionBroadcast = time;
+   }
+}
+
+void RoadsterBmb::SendIdentification()
+{
+   SendAll();
+   SendVersionFrames();
+}
+
+void RoadsterBmb::SendVersionFrames()
+{
+   for (unsigned int i = 0; i < sizeof(versionFrames) / sizeof(versionFrames[0]); i++)
+   {
+      uint8_t data[8];
+
+      for (int j = 0; j < 8; j++)
+         data[j] = versionFrames[i].data[j];
+
+      canHardware->Send(versionFrames[i].canId, data, versionFrames[i].len);
    }
 }
 

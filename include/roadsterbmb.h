@@ -2,9 +2,10 @@
 #define ROADSTERBMB_H_INCLUDED
 
 #include "canmap.h"
+#include "canhardware.h"
 #include "mebbms.h"
 
-class RoadsterBmb
+class RoadsterBmb : public CanCallback
 {
    public:
       struct SheetParams
@@ -41,14 +42,29 @@ class RoadsterBmb
       explicit RoadsterBmb(CanHardware* txCan);
       void Update(MebBms& mebBms, uint32_t time);
       void SendAll();
+      void HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc) override;
+      void HandleClear() override;
 
    private:
+      enum HandshakeState
+      {
+         HandshakeStartup,
+         HandshakeIdle,
+      };
+
+      CanHardware* canHardware;
       CanMap map0;
       CanMap map1;
       CanMap* canMaps[NumCanMaps];
+      HandshakeState handshakeState;
+      uint32_t lastVersionBroadcast;
+      uint32_t startupTime;
+      bool identificationPending;
 
       void ClearSheet(const SheetParams& params, int alarmReason);
       void InitCanMap();
+      void SendIdentification();
+      void SendVersionFrames();
       CanMap& MapForSheet(int sheet) { return *canMaps[(sheet * NumCanMaps) / NumSheets]; }
       static int RoundToInt(float value);
       static int RawVoltage(float cellVoltageMv);
