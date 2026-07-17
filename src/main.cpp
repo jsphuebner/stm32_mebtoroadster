@@ -194,11 +194,11 @@ int main(void)
    Stm32Can c2(CAN2, CanHardware::Baud125);
    CanMap cm(&c);
    CanSdo sdo(&c, &cm);
+   sdo.SetNodeId(33); //Set node ID for SDO access e.g. by wifi module
    MebBms meb(&c);
    IsaShunt i(&c, IsaShunt::CURRENT | IsaShunt::AS);
    ChaDeMo chademo(&c);
    RoadsterBmb roadster(&c2);
-   sdo.SetNodeId(33); //Set node ID for SDO access e.g. by wifi module
    //store a pointer for easier access
    bmsCan = &c;
    bmbCan = &c2;

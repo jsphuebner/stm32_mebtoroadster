@@ -438,11 +438,12 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
 
    SendBroadcastReplies();
    SendDirectedReplies();
+   //SendAll();
 }
 
 void RoadsterBmb::SendIdentification()
 {
-   SendAll();
+   //SendAll();
    SendVersionFrames();
 }
 
