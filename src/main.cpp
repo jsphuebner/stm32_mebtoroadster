@@ -99,7 +99,7 @@ static void Ms100Task(void)
    //DigIo::led_out.Set(); //turns LED on
    //DigIo::led_out.Clear(); //turns LED off
    //For every entry in digio_prj.h there is a member in DigIo
-   DigIo::led_out.Toggle();
+   DigIo::LedOut.Toggle();
    //The boot loader enables the watchdog, we have to reset it
    //at least every 2s or otherwise the controller is hard reset.
    iwdg_reset();
@@ -123,12 +123,6 @@ static void Ms10Task(void)
 {
    //Set timestamp of error message
    ErrorMessage::SetTime(rtc_get_counter_val());
-
-   if (DigIo::test_in.Get())
-   {
-      //Post a test error message when our test input is high
-      ErrorMessage::Post(ERR_TESTERROR);
-   }
 
    //AnaIn::<name>.Get() returns the filtered ADC value
    //Param::SetInt() sets an integer value.
@@ -178,7 +172,7 @@ extern "C" void tim2_isr(void)
    scheduler->Run();
 }
 
-extern "C" int main(void)
+int main(void)
 {
    extern const TERM_CMD termCmds[];
 
@@ -196,8 +190,8 @@ extern "C" int main(void)
    Stm32Scheduler s(TIM2); //We never exit main so it's ok to put it on stack
    scheduler = &s;
    //Initialize CAN1, including interrupts. Clock must be enabled in clock_setup()
-   Stm32Can c(CAN1, (CanHardware::baudrates)Param::GetInt(Param::canspeed));
-   Stm32Can c2(CAN2, (CanHardware::baudrates)Param::GetInt(Param::canspeed));
+   Stm32Can c(CAN1, CanHardware::Baud500);
+   Stm32Can c2(CAN2, CanHardware::Baud125);
    CanMap cm(&c);
    CanSdo sdo(&c, &cm);
    MebBms meb(&c);
