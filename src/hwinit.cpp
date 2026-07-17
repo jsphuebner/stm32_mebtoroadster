@@ -57,6 +57,7 @@ void clock_setup(void)
    rcc_periph_clock_enable(RCC_CRC);
    rcc_periph_clock_enable(RCC_AFIO); //CAN
    rcc_periph_clock_enable(RCC_CAN1); //CAN
+   rcc_periph_clock_enable(RCC_CAN2); //CAN
 }
 
 /* Some pins should never be left floating at any time
@@ -160,4 +161,3 @@ void tim_setup()
    /** setup gpio */
    gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_50_MHZ, GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO7 | GPIO8 | GPIO9);
 }
-

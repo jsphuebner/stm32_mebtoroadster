@@ -38,12 +38,57 @@
 #include "stm32scheduler.h"
 #include "terminalcommands.h"
 #include "sdocommands.h"
+#include "mebbms.h"
+#include "roadsterbmb.h"
+#include "chademo.h"
+#include "isashunt.h"
 
 #define PRINT_JSON 0
 
 static Stm32Scheduler* scheduler;
-static CanHardware* can;
+static Stm32Can* bmsCan;
+static Stm32Can* bmbCan;
 static CanMap* canMap;
+static RoadsterBmb* roadsterBmb;
+static IsaShunt* isa;
+MebBms* mebBms;
+static float cdmSoc;
+
+static void CalculateCdmSoc(void)
+{
+   static float estimatedSoc = 0;
+   static int32_t asOffset = 0;
+   static uint16_t noCurrentTicks = 0;
+   static bool initialized = false;
+   const float current = isa->GetValue(IsaShunt::CURRENT) / 1000.0f;
+
+   if (!initialized)
+   {
+      estimatedSoc = MIN(100.0f, MAX(0.0f, mebBms->EstimateSocFromVoltage()));
+      asOffset = isa->GetValue(IsaShunt::AS);
+      initialized = true;
+   }
+
+   if (ABS(current) > 1.0f)
+      noCurrentTicks = 0;
+   else if (noCurrentTicks < UINT16_MAX)
+      noCurrentTicks++;
+
+   if (noCurrentTicks >= 1800) // 3 minutes at 100 ms task rate
+   {
+      estimatedSoc = MIN(100.0f, MAX(0.0f, mebBms->EstimateSocFromVoltage()));
+      asOffset = isa->GetValue(IsaShunt::AS);
+      cdmSoc = estimatedSoc;
+   }
+   else
+   {
+      const int32_t as = isa->GetValue(IsaShunt::AS) - asOffset;
+      const float ah = as / 3600.0f;
+      const float maxAh = MAX(1.0f, mebBms->GetMaximumAmpHours());
+      const float soc = estimatedSoc + (100.0f * ah / maxAh);
+      cdmSoc = MIN(100.0f, MAX(0.0f, soc));
+   }
+}
 
 //sample 100ms task
 static void Ms100Task(void)
@@ -54,7 +99,7 @@ static void Ms100Task(void)
    //DigIo::led_out.Set(); //turns LED on
    //DigIo::led_out.Clear(); //turns LED off
    //For every entry in digio_prj.h there is a member in DigIo
-   DigIo::led_out.Toggle();
+   DigIo::LedOut.Toggle();
    //The boot loader enables the watchdog, we have to reset it
    //at least every 2s or otherwise the controller is hard reset.
    iwdg_reset();
@@ -62,10 +107,15 @@ static void Ms100Task(void)
    float cpuLoad = scheduler->GetCpuLoad();
    //This sets a fixed point value WITHOUT calling the parm_Change() function
    Param::SetFloat(Param::cpuload, cpuLoad / 10);
+   isa->InitializeAndStartIfNeeded();
+   CalculateCdmSoc();
 
    //If we chose to send CAN messages every 100 ms, do this here.
    if (Param::GetInt(Param::canperiod) == CAN_PERIOD_100MS)
+   {
       canMap->SendAll();
+      roadsterBmb->SendAll();
+   }
 }
 
 //sample 10 ms task
@@ -74,19 +124,19 @@ static void Ms10Task(void)
    //Set timestamp of error message
    ErrorMessage::SetTime(rtc_get_counter_val());
 
-   if (DigIo::test_in.Get())
-   {
-      //Post a test error message when our test input is high
-      ErrorMessage::Post(ERR_TESTERROR);
-   }
-
    //AnaIn::<name>.Get() returns the filtered ADC value
    //Param::SetInt() sets an integer value.
    Param::SetInt(Param::testain, AnaIn::test.Get());
+   mebBms->Accumulate();
+   roadsterBmb->Update(*mebBms, rtc_get_counter_val());
+   ChaDeMo::UpdateParams(*mebBms, cdmSoc);
 
    //If we chose to send CAN messages every 10 ms, do this here.
    if (Param::GetInt(Param::canperiod) == CAN_PERIOD_10MS)
+   {
       canMap->SendAll();
+      roadsterBmb->SendAll();
+   }
 }
 
 /** This function is called when the user changes a parameter */
@@ -94,6 +144,21 @@ void Param::Change(Param::PARAM_NUM paramNum)
 {
    switch (paramNum)
    {
+   case Param::canspeed:
+      if (nullptr != bmsCan)
+         bmsCan->SetBaudrate((CanHardware::baudrates)Param::GetInt(Param::canspeed));
+      if (nullptr != bmbCan)
+         bmbCan->SetBaudrate((CanHardware::baudrates)Param::GetInt(Param::canspeed));
+      break;
+   case Param::ahmax:
+      if (nullptr != mebBms)
+         mebBms->SetMaximumAmpHours(Param::GetFloat(Param::ahmax));
+      break;
+   case Param::chargekp:
+   case Param::chargeki:
+      if (nullptr != mebBms)
+         mebBms->SetControllerGains(Param::GetInt(Param::chargekp), Param::GetInt(Param::chargeki));
+      break;
    default:
       //Handle general parameter changes here. Add paramNum labels for handling specific parameters
       break;
@@ -107,7 +172,7 @@ extern "C" void tim2_isr(void)
    scheduler->Run();
 }
 
-extern "C" int main(void)
+int main(void)
 {
    extern const TERM_CMD termCmds[];
 
@@ -125,13 +190,27 @@ extern "C" int main(void)
    Stm32Scheduler s(TIM2); //We never exit main so it's ok to put it on stack
    scheduler = &s;
    //Initialize CAN1, including interrupts. Clock must be enabled in clock_setup()
-   Stm32Can c(CAN1, (CanHardware::baudrates)Param::GetInt(Param::canspeed));
+   Stm32Can c(CAN1, CanHardware::Baud500);
+   Stm32Can c2(CAN2, CanHardware::Baud125);
    CanMap cm(&c);
    CanSdo sdo(&c, &cm);
+   MebBms meb(&c);
+   IsaShunt i(&c, IsaShunt::CURRENT | IsaShunt::AS);
+   ChaDeMo chademo(&c);
+   RoadsterBmb roadster(&c2);
    sdo.SetNodeId(33); //Set node ID for SDO access e.g. by wifi module
    //store a pointer for easier access
-   can = &c;
+   bmsCan = &c;
+   bmbCan = &c2;
    canMap = &cm;
+   mebBms = &meb;
+   isa = &i;
+   roadsterBmb = &roadster;
+   mebBms->SetMaximumAmpHours(Param::GetFloat(Param::ahmax));
+   mebBms->SetControllerGains(Param::GetInt(Param::chargekp), Param::GetInt(Param::chargeki));
+
+   //Restore default CHaDeMo CAN mappings if user erased them
+   ChaDeMo::CheckAndRestoreCanMap(&cm);
 
    //This is all we need to do to set up a terminal on USART3
    Terminal t(USART3, termCmds);
@@ -168,4 +247,3 @@ extern "C" int main(void)
 
    return 0;
 }
-
