@@ -98,8 +98,8 @@ struct VersionFrame
    uint8_t data[8];
 };
 
-static const uint32_t IdentificationRequestId = 0x000;
-static const uint32_t VmsHandshakeId = 0x380;
+static const uint32_t IdentificationRequestId = 0x000; // VMS identification request observed before the BMB version replay.
+static const uint32_t VmsHandshakeId = 0x380; // VMS handshake command carrying the 00 02 08 00 00 10 trigger payload.
 // RoadsterBmb::Update() receives rtc_get_counter_val(), so these are RTC seconds.
 static const uint32_t VersionBroadcastPeriodSeconds = 60;
 static const uint32_t StartupHandshakeDelaySeconds = 2;
