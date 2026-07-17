@@ -100,8 +100,8 @@ struct VersionFrame
 
 static const uint32_t IdentificationRequestId = 0x000;
 static const uint32_t VmsHandshakeId = 0x380;
-static const uint32_t VersionBroadcastPeriod = 60;
-static const uint32_t StartupHandshakeDelay = 2;
+static const uint32_t VersionBroadcastPeriodSeconds = 60;
+static const uint32_t StartupHandshakeDelaySeconds = 2;
 static const VersionFrame versionFrames[] =
 {
    { 0x601, 8, { 0x42, 0x53, 0x4D, 0x20, 0x52, 0x30, 0x00, 0x40 } },
@@ -154,9 +154,9 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
       startupTime = time;
 
    const bool sendIdentification = identificationPending ||
-                                   (handshakeState == HandshakeStartup && (time - startupTime) >= StartupHandshakeDelay);
+                                   (handshakeState == HandshakeStartup && (time - startupTime) >= StartupHandshakeDelaySeconds);
    const bool sendVersionOnly = handshakeState == HandshakeIdle && !sendIdentification &&
-                                ((time - lastVersionBroadcast) >= VersionBroadcastPeriod);
+                                ((time - lastVersionBroadcast) >= VersionBroadcastPeriodSeconds);
 
    const bool alive = mebBms.Alive(time);
 
