@@ -29,6 +29,20 @@
 					<SilentBuild command="CONTROL=SINE make &gt; $(CMD_NULL)" />
 				</MakeCommands>
 			</Target>
+			<Target title="Test">
+				<Option output="test/test_roadsterbmb" prefix_auto="0" extension_auto="0" />
+				<Option object_output="test/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<MakeCommands>
+					<Build command="make Test" />
+					<CompileFile command="$make -f  $file " />
+					<Clean command="make cleanTest" />
+					<DistClean command="$make -f $makefile distclean$target" />
+					<AskRebuildNeeded command="$make -q" />
+					<SilentBuild command="make Test &gt; $(CMD_NULL)" />
+				</MakeCommands>
+			</Target>
 		</Build>
 		<Unit filename="Makefile" />
 		<Unit filename="include/anain_prj.h" />
