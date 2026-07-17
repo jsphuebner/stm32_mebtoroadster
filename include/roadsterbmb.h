@@ -56,6 +56,13 @@ class RoadsterBmb : public CanCallback
       CanMap map0;
       CanMap map1;
       CanMap* canMaps[NumCanMaps];
+      struct SheetReply
+      {
+         bool pending;
+         uint8_t data[8];
+         uint8_t len;
+      };
+
       HandshakeState handshakeState;
       uint32_t lastVersionBroadcast;
       uint32_t startupTime;
@@ -63,13 +70,26 @@ class RoadsterBmb : public CanCallback
       bool bmbRequestReplyPending;
       bool bmbBroadcastReplyPending;
 
+      // 0x006 broadcast pending replies (sent to all nodes on the next Update() call)
+      bool broadcastEchoPending;
+      uint8_t broadcastEchoData[3];
+      bool broadcastInfoPending;
+      bool broadcastCapabilityPending;
+      bool broadcastDisconnectPending;
+
+      // Per-sheet directed pending replies (0x0A-0x5A -> 0x30A-0x35A)
+      SheetReply directedReplies[NumSheets];
+
       void ClearSheet(const SheetParams& params, int alarmReason);
       void InitCanMap();
       void SendIdentification();
       void SendVersionFrames();
       void SendBmbRequestReply();
       void SendBmbBroadcastReply();
+      void SendBroadcastReplies();
+      void SendDirectedReplies();
       CanMap& MapForSheet(int sheet) { return *canMaps[(sheet * NumCanMaps) / NumSheets]; }
+      static void FillFirmwareReply(uint8_t subLo, uint8_t subHi, uint8_t* buf);
       static int RoundToInt(float value);
       static int RawVoltage(float cellVoltageMv);
       static int RawTemperature(float temperatureDegC);
