@@ -100,6 +100,8 @@ struct VersionFrame
 
 static const uint32_t IdentificationRequestId = 0x000; // VMS identification request observed before the BMB version replay.
 static const uint32_t VmsHandshakeId = 0x380; // VMS handshake command carrying the 00 02 08 00 00 10 trigger payload.
+static const uint8_t BmbRequestReplyData[] = { 0x09, 0x74, 0x19, 0x29, 0x1B, 0x02 };
+static const uint8_t BmbBroadcastReplyData[] = { 0x09, 0x46, 0x00, 0x00, 0x00, 0x01 };
 // RoadsterBmb::Update() receives rtc_get_counter_val(), so these are RTC seconds.
 static const uint32_t VersionBroadcastPeriodSeconds = 60;
 static const uint32_t StartupHandshakeDelaySeconds = 2;
@@ -112,7 +114,8 @@ static const VersionFrame versionFrames[] =
 
 RoadsterBmb::RoadsterBmb(CanHardware* txCan)
    : canHardware(txCan), map0(txCan, false), map1(txCan, false), handshakeState(HandshakeStartup),
-     lastVersionBroadcast(0), startupTime(0), identificationPending(false)
+     lastVersionBroadcast(0), startupTime(0), identificationPending(false),
+     bmbRequestReplyPending(false), bmbBroadcastReplyPending(false)
 {
    canMaps[0] = &map0;
    canMaps[1] = &map1;
@@ -134,6 +137,18 @@ void RoadsterBmb::HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc)
    if (canId == IdentificationRequestId && dlc >= 2 && bytes[0] == 0x00 && bytes[1] == 0x04)
    {
       identificationPending = true;
+   }
+   else if (canId == VmsHandshakeId && dlc >= 7 &&
+            bytes[0] == 0x02 && bytes[1] == 0x00 &&
+            bytes[2] == 0x14 && bytes[3] == 0x00)
+   {
+      bmbRequestReplyPending = true;
+   }
+   else if (canId == VmsHandshakeId && dlc >= 7 &&
+            bytes[0] == 0x02 && bytes[1] == 0x00 &&
+            bytes[2] == 0x02 && bytes[3] == 0x00)
+   {
+      bmbBroadcastReplyPending = true;
    }
    else if (canId == VmsHandshakeId && dlc >= 6 &&
             bytes[0] == 0x00 && bytes[1] == 0x02 && bytes[2] == 0x08 &&
@@ -306,6 +321,18 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
       SendVersionFrames();
       lastVersionBroadcast = time;
    }
+
+   if (bmbBroadcastReplyPending)
+   {
+      SendBmbBroadcastReply();
+      bmbBroadcastReplyPending = false;
+   }
+
+   if (bmbRequestReplyPending)
+   {
+      SendBmbRequestReply();
+      bmbRequestReplyPending = false;
+   }
 }
 
 void RoadsterBmb::SendIdentification()
@@ -325,6 +352,26 @@ void RoadsterBmb::SendVersionFrames()
 
       canHardware->Send(versionFrames[i].canId, data, versionFrames[i].len);
    }
+}
+
+void RoadsterBmb::SendBmbRequestReply()
+{
+   uint8_t data[sizeof(BmbRequestReplyData)];
+
+   for (unsigned int i = 0; i < sizeof(BmbRequestReplyData); i++)
+      data[i] = BmbRequestReplyData[i];
+
+   canHardware->Send(VmsHandshakeId, data, sizeof(BmbRequestReplyData));
+}
+
+void RoadsterBmb::SendBmbBroadcastReply()
+{
+   uint8_t data[sizeof(BmbBroadcastReplyData)];
+
+   for (unsigned int i = 0; i < sizeof(BmbBroadcastReplyData); i++)
+      data[i] = BmbBroadcastReplyData[i];
+
+   canHardware->Send(VmsHandshakeId, data, sizeof(BmbBroadcastReplyData));
 }
 
 void RoadsterBmb::ClearSheet(const SheetParams& params, int alarmReason)

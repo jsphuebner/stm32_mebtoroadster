@@ -60,11 +60,15 @@ class RoadsterBmb : public CanCallback
       uint32_t lastVersionBroadcast;
       uint32_t startupTime;
       bool identificationPending;
+      bool bmbRequestReplyPending;
+      bool bmbBroadcastReplyPending;
 
       void ClearSheet(const SheetParams& params, int alarmReason);
       void InitCanMap();
       void SendIdentification();
       void SendVersionFrames();
+      void SendBmbRequestReply();
+      void SendBmbBroadcastReply();
       CanMap& MapForSheet(int sheet) { return *canMaps[(sheet * NumCanMaps) / NumSheets]; }
       static int RoundToInt(float value);
       static int RawVoltage(float cellVoltageMv);
