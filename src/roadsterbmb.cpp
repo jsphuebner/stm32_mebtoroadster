@@ -100,6 +100,7 @@ struct VersionFrame
 
 static const uint32_t IdentificationRequestId = 0x000;
 static const uint32_t VmsHandshakeId = 0x380;
+// RoadsterBmb::Update() receives rtc_get_counter_val(), so these are RTC seconds.
 static const uint32_t VersionBroadcastPeriodSeconds = 60;
 static const uint32_t StartupHandshakeDelaySeconds = 2;
 static const VersionFrame versionFrames[] =
@@ -183,6 +184,7 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
          const int mebCell = MappedCellIndex(sheet, brick);
          const float cellVoltage = mebBms.GetCellVoltage(mebCell);
 
+         // Treat values below 1 V as invalid/uninitialized cell measurements.
          if (cellVoltage < 1000)
             continue;
 
