@@ -107,9 +107,13 @@ static const uint8_t BmbBroadcastReplyData[] = { 0x09, 0x46, 0x00, 0x00, 0x00, 0
 
 // Node IDs used by BMB sheets on the Roadster bus (one per sheet, stride 8).
 // Each sheet receives on 0x00A + sheet*8 and replies on 0x30A + sheet*8.
+// Cell average voltage replies split across two IDs per sheet:
+//   msgIdx 0,1 → 0x308 + sheet*8 (CellAvgReplyBaseId)
+//   msgIdx 2   → 0x30A + sheet*8 (NodeReplyBaseId)
 static const uint32_t NodeBroadcastId = 0x006;
 static const uint32_t NodeBaseId = 0x00A;
 static const uint32_t NodeReplyBaseId = 0x30A;
+static const uint32_t CellAvgReplyBaseId = 0x308; // base for cell avg msgs 0 and 1
 static const uint32_t NodeIdStride = 8;
 
 // Reply to 0x006 [1F 00]: BMB node type/version info.
@@ -560,15 +564,20 @@ void RoadsterBmb::SendBroadcastCellAvgReplies(MebBms& mebBms)
 {
    // For each sheet, send 3 messages of 3 bricks each, covering all 9 bricks.
    // Format per message: [0x20, msgIdx, v0_lo, v0_hi, v1_lo, v1_hi, v2_lo, v2_hi]
+   // The Roadster protocol uses two CAN IDs per sheet for these messages:
+   //   msgIdx 0,1 → CellAvgReplyBaseId + sheet*8 (= 0x308 + sheet*8)
+   //   msgIdx 2   → NodeReplyBaseId    + sheet*8 (= 0x30A + sheet*8)
    static const int BricksPerMsg = 3;
    static const int MsgsPerSheet = (RoadsterBricksPerSheet + BricksPerMsg - 1) / BricksPerMsg; // = 3
 
    for (int sheet = 0; sheet < NumSheets; sheet++)
    {
-      const uint32_t replyId = NodeReplyBaseId + static_cast<uint32_t>(sheet) * NodeIdStride;
-
       for (int msgIdx = 0; msgIdx < MsgsPerSheet; msgIdx++)
       {
+         const uint32_t replyId = (msgIdx < MsgsPerSheet - 1)
+            ? (CellAvgReplyBaseId + static_cast<uint32_t>(sheet) * NodeIdStride)
+            : (NodeReplyBaseId    + static_cast<uint32_t>(sheet) * NodeIdStride);
+
          uint8_t data[8];
          data[0] = 0x20; // multiplexer
          data[1] = static_cast<uint8_t>(msgIdx);

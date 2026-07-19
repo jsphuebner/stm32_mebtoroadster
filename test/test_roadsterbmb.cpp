@@ -45,11 +45,12 @@ static std::ostream& operator<<(std::ostream& o, const MultiCanStub::Frame& f)
 // ---------------------------------------------------------------------------
 // CAN ID constants (mirror those in roadsterbmb.cpp)
 // ---------------------------------------------------------------------------
-static const uint32_t NodeBroadcastId   = 0x006;
-static const uint32_t IdentificationId  = 0x000;
-static const uint32_t VmsHandshakeId    = 0x380;
-static const uint32_t NodeReplyBaseId   = 0x30A;
-static const uint32_t NodeIdStride      = 8;
+static const uint32_t NodeBroadcastId      = 0x006;
+static const uint32_t IdentificationId     = 0x000;
+static const uint32_t VmsHandshakeId       = 0x380;
+static const uint32_t NodeReplyBaseId      = 0x30A;
+static const uint32_t CellAvgReplyBaseId   = 0x308; // base for cell avg msgs 0 and 1
+static const uint32_t NodeIdStride         = 8;
 
 // ---------------------------------------------------------------------------
 // Helpers to build raw CAN data arrays
@@ -316,12 +317,15 @@ static void test_cell_avg_reply_on_0x25()
    roadster->Update(*mebBms, 50);
 
    // Each of the 11 sheets should reply with 3 messages (indices 0, 1, 2)
+   // msgIdx 0,1 → CellAvgReplyBaseId + sheet*8; msgIdx 2 → NodeReplyBaseId + sheet*8
    bool ok = true;
    for (int sheet = 0; sheet < 11; sheet++)
    {
-      uint32_t replyId = NodeReplyBaseId + static_cast<uint32_t>(sheet) * NodeIdStride;
       for (int idx = 0; idx < 3; idx++)
       {
+         const uint32_t replyId = (idx < 2)
+            ? (CellAvgReplyBaseId + static_cast<uint32_t>(sheet) * NodeIdStride)
+            : (NodeReplyBaseId    + static_cast<uint32_t>(sheet) * NodeIdStride);
          bool found = false;
          for (const auto& f : canStub->sentFrames)
          {
@@ -360,7 +364,8 @@ static void test_cell_avg_reply_voltage_values()
    roadster->Update(*mebBms, 50);
 
    // Find the first 0x20 message (idx=0) on sheet 0's reply channel
-   const uint32_t replyId = NodeReplyBaseId; // sheet 0
+   // msgIdx 0 uses CellAvgReplyBaseId (= 0x308) for sheet 0
+   const uint32_t replyId = CellAvgReplyBaseId; // sheet 0, msgIdx 0 and 1
    bool found = false;
    bool voltageOk = true;
 
@@ -460,8 +465,8 @@ static void test_fahrbereit_log_replay_cell_avg()
    canStub->Clear();
    roadster->Update(*mebBms, 50);
 
-   // Verify at least sheet 0 replied with a 0x20 message
-   ASSERT(FramePresent(NodeReplyBaseId, 0x20));
+   // Verify at least sheet 0 replied with a 0x20 message (msgIdx 0 → CellAvgReplyBaseId)
+   ASSERT(FramePresent(CellAvgReplyBaseId, 0x20));
 }
 
 // ---------------------------------------------------------------------------
