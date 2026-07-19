@@ -90,6 +90,11 @@ static void CalculateCdmSoc(void)
    }
 }
 
+static void Ms500Task()
+{
+   roadsterBmb->SendAll();
+}
+
 //sample 100ms task
 static void Ms100Task(void)
 {
@@ -110,33 +115,13 @@ static void Ms100Task(void)
    isa->InitializeAndStartIfNeeded();
    CalculateCdmSoc();
 
-   //If we chose to send CAN messages every 100 ms, do this here.
-   if (Param::GetInt(Param::canperiod) == CAN_PERIOD_100MS)
-   {
-      canMap->SendAll();
-      roadsterBmb->SendAll();
-   }
-}
+   canMap->SendAll();
 
-//sample 10 ms task
-static void Ms10Task(void)
-{
-   //Set timestamp of error message
    ErrorMessage::SetTime(rtc_get_counter_val());
 
-   //AnaIn::<name>.Get() returns the filtered ADC value
-   //Param::SetInt() sets an integer value.
-   Param::SetInt(Param::testain, AnaIn::test.Get());
    mebBms->Accumulate();
    roadsterBmb->Update(*mebBms, rtc_get_counter_val());
    ChaDeMo::UpdateParams(*mebBms, cdmSoc);
-
-   //If we chose to send CAN messages every 10 ms, do this here.
-   if (Param::GetInt(Param::canperiod) == CAN_PERIOD_10MS)
-   {
-      canMap->SendAll();
-      roadsterBmb->SendAll();
-   }
 }
 
 /** This function is called when the user changes a parameter */
@@ -221,8 +206,8 @@ int main(void)
    //The longest interval is 655ms due to hardware restrictions
    //You have to enable the interrupt (int this case for TIM2) in nvic_setup()
    //There you can also configure the priority of the scheduler over other interrupts
-   s.AddTask(Ms10Task, 10);
    s.AddTask(Ms100Task, 100);
+   s.AddTask(Ms500Task, 500);
 
    //backward compatibility, version 4 was the first to support the "stream" command
    Param::SetInt(Param::version, 4);
