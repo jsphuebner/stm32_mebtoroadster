@@ -158,7 +158,7 @@ RoadsterBmb::RoadsterBmb(CanHardware* txCan)
      bmbRequestReplyPending(false), bmbBroadcastReplyPending(false),
      broadcastEchoPending(false), broadcastEchoData{0, 0, 0},
      broadcastInfoPending(false), broadcastCapabilityPending(false), broadcastDisconnectPending(false),
-     broadcastCellAvgPending(false)
+     broadcastCellAvgPending(false), cellAvgSheetOffset(0)
 {
    canMaps[0] = &map0;
    canMaps[1] = &map1;
@@ -232,6 +232,7 @@ void RoadsterBmb::HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc)
       else if (dlc >= 1 && bytes[0] == 0x25)
       {
         broadcastCellAvgPending = true;
+        cellAvgSheetOffset = 0;
       }
    }
    else
@@ -451,8 +452,22 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
    if (broadcastCellAvgPending)
    {
       if (alive)
-         SendBroadcastCellAvgReplies(mebBms);
-      broadcastCellAvgPending = false;
+      {
+         static const int CellAvgSheetsPerCycle = 3; // 3 msgs/sheet × 3 = 9 ≤ 10 (half the 20-entry buffer)
+         const int sheetsThisCycle = MIN(CellAvgSheetsPerCycle, NumSheets - cellAvgSheetOffset);
+         SendBroadcastCellAvgReplies(mebBms, cellAvgSheetOffset, sheetsThisCycle);
+         cellAvgSheetOffset += sheetsThisCycle;
+         if (cellAvgSheetOffset >= NumSheets)
+         {
+            broadcastCellAvgPending = false;
+            cellAvgSheetOffset = 0;
+         }
+      }
+      else
+      {
+         broadcastCellAvgPending = false;
+         cellAvgSheetOffset = 0;
+      }
    }
    //SendAll();
 }
@@ -560,17 +575,20 @@ void RoadsterBmb::SendDirectedReplies()
    }
 }
 
-void RoadsterBmb::SendBroadcastCellAvgReplies(MebBms& mebBms)
+void RoadsterBmb::SendBroadcastCellAvgReplies(MebBms& mebBms, int startSheet, int numSheets)
 {
    // For each sheet, send 3 messages of 3 bricks each, covering all 9 bricks.
    // Format per message: [0x20, msgIdx, v0_lo, v0_hi, v1_lo, v1_hi, v2_lo, v2_hi]
    // The Roadster protocol uses two CAN IDs per sheet for these messages:
    //   msgIdx 0,1 → CellAvgReplyBaseId + sheet*8 (= 0x308 + sheet*8)
    //   msgIdx 2   → NodeReplyBaseId    + sheet*8 (= 0x30A + sheet*8)
+   // Caller passes a startSheet/numSheets window to spread the 33 total frames
+   // (11 sheets × 3 msgs) across multiple Update() cycles without overflowing
+   // the 20-entry CAN TX buffer.
    static const int BricksPerMsg = 3;
    static const int MsgsPerSheet = (RoadsterBricksPerSheet + BricksPerMsg - 1) / BricksPerMsg; // = 3
 
-   for (int sheet = 0; sheet < NumSheets; sheet++)
+   for (int sheet = startSheet; sheet < startSheet + numSheets; sheet++)
    {
       for (int msgIdx = 0; msgIdx < MsgsPerSheet; msgIdx++)
       {
