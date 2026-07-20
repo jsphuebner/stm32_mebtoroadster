@@ -140,6 +140,6 @@ get-deps:
 	$(Q)${MAKE} -C libopencm3 TARGETS=stm32/f1
 
 Test:
-	cd test && $(MAKE)
+	cd test && $(MAKE) && ./test_roadsterbmb
 cleanTest:
 	cd test && $(MAKE) clean

@@ -76,6 +76,7 @@ class RoadsterBmb : public CanCallback
       bool broadcastInfoPending;
       bool broadcastCapabilityPending;
       bool broadcastDisconnectPending;
+      bool broadcastCellAvgPending; // 0x25 -> reply with 0x20 cell voltage messages
 
       // Per-sheet directed pending replies (0x0A-0x5A -> 0x30A-0x35A)
       SheetReply directedReplies[NumSheets];
@@ -87,6 +88,7 @@ class RoadsterBmb : public CanCallback
       void SendBmbRequestReply();
       void SendBmbBroadcastReply();
       void SendBroadcastReplies();
+      void SendBroadcastCellAvgReplies(MebBms& mebBms);
       void SendDirectedReplies();
       CanMap& MapForSheet(int sheet) { return *canMaps[(sheet * NumCanMaps) / NumSheets]; }
       static void FillFirmwareReply(uint8_t subLo, uint8_t subHi, uint8_t* buf);
