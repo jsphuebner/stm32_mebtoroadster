@@ -453,7 +453,7 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
    {
       if (alive)
       {
-         static const int CellAvgSheetsPerCycle = 3; // 3 msgs/sheet × 3 = 9 ≤ 10 (half the 20-entry buffer)
+         static const int CellAvgSheetsPerCycle = 3; // 3 msgs/sheet × 3 sheets = 9 frames, within half the 20-entry buffer
          const int sheetsThisCycle = MIN(CellAvgSheetsPerCycle, NumSheets - cellAvgSheetOffset);
          SendBroadcastCellAvgReplies(mebBms, cellAvgSheetOffset, sheetsThisCycle);
          cellAvgSheetOffset += sheetsThisCycle;
