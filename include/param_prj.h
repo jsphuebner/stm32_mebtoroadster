@@ -39,7 +39,7 @@
  */
 
  //Define a version string of your firmware here
-#define VER 1.00.R
+#define VER 1.01.R
 
 /* Entries must be ordered as follows:
    1. Saveable parameters (id != 0)
@@ -62,7 +62,6 @@
     VALUE_ENTRY(opmode,      OPMODES, 2000 ) \
     VALUE_ENTRY(version,     VERSTR,  2001 ) \
     VALUE_ENTRY(lasterr,     errorListString,  2002 ) \
-    VALUE_ENTRY(testain,     "dig",   2003 ) \
     VALUE_ENTRY(cpuload,     "%",     2004 ) \
     VALUE_ENTRY(bmb1_bal_min_v, "raw", 2100) \
     VALUE_ENTRY(bmb1_bal_min_brick, "id", 2101) \

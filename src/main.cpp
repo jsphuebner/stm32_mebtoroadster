@@ -120,8 +120,12 @@ static void Ms100Task(void)
    ErrorMessage::SetTime(rtc_get_counter_val());
 
    mebBms->Accumulate();
-   roadsterBmb->Update(*mebBms, rtc_get_counter_val());
    ChaDeMo::UpdateParams(*mebBms, cdmSoc);
+}
+
+static void Ms10Task(void)
+{
+   roadsterBmb->Update(*mebBms, rtc_get_counter_val());
 }
 
 /** This function is called when the user changes a parameter */
@@ -206,6 +210,7 @@ int main(void)
    //The longest interval is 655ms due to hardware restrictions
    //You have to enable the interrupt (int this case for TIM2) in nvic_setup()
    //There you can also configure the priority of the scheduler over other interrupts
+   s.AddTask(Ms10Task, 10);
    s.AddTask(Ms100Task, 100);
    s.AddTask(Ms500Task, 500);
 
