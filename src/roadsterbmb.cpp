@@ -158,7 +158,7 @@ RoadsterBmb::RoadsterBmb(CanHardware* txCan)
      bmbRequestReplyPending(false), bmbBroadcastReplyPending(false),
      broadcastEchoPending(false), broadcastEchoData{0, 0, 0},
      broadcastInfoPending(false), broadcastCapabilityPending(false), broadcastDisconnectPending(false),
-     broadcastCellAvgPending(false), cellAvgSheetOffset(0)
+     broadcastCellAvgPending(false), cellAvgSheetOffset(0), canMapSendIdx(0)
 {
    canMaps[0] = &map0;
    canMaps[1] = &map1;
@@ -173,12 +173,6 @@ RoadsterBmb::RoadsterBmb(CanHardware* txCan)
    }
 
    HandleClear();
-}
-
-void RoadsterBmb::SendAll()
-{
-   for (int i = 0; i < NumCanMaps; i++)
-      canMaps[i]->SendAll();
 }
 
 void RoadsterBmb::HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc)
@@ -469,7 +463,13 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
          cellAvgSheetOffset = 0;
       }
    }
-   //SendAll();
+
+   // Spread CanMap transmissions across Update() calls to avoid overflowing the TX buffer.
+   // SendByIndex sends one CAN message per map (if that slot is populated), so at most
+   // NumCanMaps frames are queued per 10ms cycle — well within the 20-entry buffer limit.
+   for (int i = 0; i < NumCanMaps; i++)
+      canMaps[i]->SendByIndex(canMapSendIdx);
+   canMapSendIdx = (canMapSendIdx + 1) % MAX_MESSAGES;
 }
 
 void RoadsterBmb::SendIdentification()

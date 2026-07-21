@@ -90,11 +90,6 @@ static void CalculateCdmSoc(void)
    }
 }
 
-static void Ms500Task()
-{
-   roadsterBmb->SendAll();
-}
-
 //sample 100ms task
 static void Ms100Task(void)
 {
@@ -212,7 +207,6 @@ int main(void)
    //There you can also configure the priority of the scheduler over other interrupts
    s.AddTask(Ms10Task, 10);
    s.AddTask(Ms100Task, 100);
-   s.AddTask(Ms500Task, 500);
 
    //backward compatibility, version 4 was the first to support the "stream" command
    Param::SetInt(Param::version, 4);

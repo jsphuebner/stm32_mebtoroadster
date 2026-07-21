@@ -41,7 +41,6 @@ class RoadsterBmb : public CanCallback
       static const int NumCanMaps = 2;
       explicit RoadsterBmb(CanHardware* txCan);
       void Update(MebBms& mebBms, uint32_t time);
-      void SendAll();
       void HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc) override;
       void HandleClear() override;
 
@@ -78,6 +77,7 @@ class RoadsterBmb : public CanCallback
       bool broadcastDisconnectPending;
       bool broadcastCellAvgPending; // 0x25 -> reply with 0x20 cell voltage messages
       int cellAvgSheetOffset;       // next sheet to send in the current cell-avg reply burst
+      uint8_t canMapSendIdx;        // rolling index for spreading CanMap SendByIndex across Update() calls
 
       // Per-sheet directed pending replies (0x0A-0x5A -> 0x30A-0x35A)
       SheetReply directedReplies[NumSheets];
