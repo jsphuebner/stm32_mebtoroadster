@@ -349,7 +349,8 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
    SendBroadcastReplies();
    SendDirectedReplies();
 
-   if (broadcastCellAvgPending >= 1)
+   // Logs show these frames are only emitted after every tenth 0x25 poll.
+   if (broadcastCellAvgPending >= 10)
    {
       if (alive)
       {

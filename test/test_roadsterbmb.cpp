@@ -215,16 +215,49 @@ static void test_directed_presence_reply()
 }
 
 // ---------------------------------------------------------------------------
-// Test: 0x006 0x25 request generates 0x20 cell-voltage replies on all sheets
+// Test: the first nine 0x006 0x25 requests do not yet trigger 0x20 replies
 // ---------------------------------------------------------------------------
-static void test_cell_avg_reply_on_0x25()
+static void test_cell_avg_reply_not_sent_before_tenth_request()
 {
    // Fill MEB with 3000 mV cells
    FillMebVoltages(*canStub, 3000);
 
    roadster->Update(*mebBms, 2); // ensure MEB data is alive
 
-   // Send the 0x25 broadcast request
+   for (int i = 0; i < 9; i++)
+   {
+      SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
+      roadster->Update(*mebBms, 10 + static_cast<uint32_t>(i));
+   }
+
+   bool found = false;
+   for (const auto& f : canStub->sentFrames)
+   {
+      if (f.data[0] == 0x20)
+      {
+         found = true;
+         break;
+      }
+   }
+   ASSERT(!found);
+}
+
+// ---------------------------------------------------------------------------
+// Test: every tenth 0x006 0x25 request generates 0x20 cell-voltage replies
+// ---------------------------------------------------------------------------
+static void test_cell_avg_reply_on_tenth_0x25()
+{
+   // Fill MEB with 3000 mV cells
+   FillMebVoltages(*canStub, 3000);
+
+   roadster->Update(*mebBms, 2); // ensure MEB data is alive
+
+   for (int i = 0; i < 9; i++)
+   {
+      SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
+      roadster->Update(*mebBms, 10 + static_cast<uint32_t>(i));
+   }
+
    SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
 
    // The implementation sends 3 sheets per Update() call; 4 calls are needed to cover all 11 sheets (3+3+3+2).
@@ -274,6 +307,12 @@ static void test_cell_avg_reply_voltage_values()
    FillMebVoltages(*canStub, 3000);
    roadster->Update(*mebBms, 2);
 
+   for (int i = 0; i < 9; i++)
+   {
+      SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
+      roadster->Update(*mebBms, 10 + static_cast<uint32_t>(i));
+   }
+
    SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
 
    canStub->Clear();
@@ -322,7 +361,8 @@ static void test_cell_avg_reply_suppressed_when_not_alive()
    // Send startup
    roadster->Update(*mebBms, 0);
 
-   SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
+   for (int i = 0; i < 10; i++)
+      SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
 
    canStub->Clear();
    roadster->Update(*mebBms, 200);
@@ -341,17 +381,23 @@ static void test_cell_avg_reply_suppressed_when_not_alive()
 }
 
 // ---------------------------------------------------------------------------
-// Test: replay of fahrbereit-log sequence – 0x25 triggers 0x20 voltage replies
+// Test: replay of fahrbereit-log cadence – the tenth 0x25 triggers 0x20 voltage replies
 // ---------------------------------------------------------------------------
 static void test_fahrbereit_log_replay_cell_avg()
 {
-   // The fahrbereit log shows 0x006 0x25 0x00 0x02 0x01 requests.
-   // Fill MEB, send the request, verify replies exist.
+   // The fahrbereit log shows repeated 0x006 0x25 0x00 0x02 0x01 polls.
+   // Fill MEB, send ten polls, verify replies exist.
 
    FillMebVoltages(*canStub, 4020);
    roadster->Update(*mebBms, 1);
 
-   // Replicate: 00000006,4,25,00,02,01
+   for (int i = 0; i < 9; i++)
+   {
+      // Replicate: 00000006,4,25,00,02,01
+      SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
+      roadster->Update(*mebBms, 10 + static_cast<uint32_t>(i));
+   }
+
    SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
 
    canStub->Clear();
@@ -368,7 +414,8 @@ REGISTER_TEST(RoadsterBmbTest,
    test_broadcast_info_reply,
    test_broadcast_capability_reply,
    test_directed_presence_reply,
-   test_cell_avg_reply_on_0x25,
+   test_cell_avg_reply_not_sent_before_tenth_request,
+   test_cell_avg_reply_on_tenth_0x25,
    test_cell_avg_reply_voltage_values,
    test_cell_avg_reply_suppressed_when_not_alive,
    test_fahrbereit_log_replay_cell_avg
