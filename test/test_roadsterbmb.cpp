@@ -227,7 +227,7 @@ static void test_cell_avg_reply_on_0x25()
    // Send the 0x25 broadcast request
    SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
 
-   // The implementation sends 3 sheets per Update() call; 4 calls cover all 11 sheets.
+   // The implementation sends 3 sheets per Update() call; 4 calls are needed to cover all 11 sheets (3+3+3+2).
    canStub->Clear();
    for (int i = 0; i < 4; i++)
       roadster->Update(*mebBms, 50 + static_cast<uint32_t>(i));
