@@ -46,7 +46,6 @@ static std::ostream& operator<<(std::ostream& o, const MultiCanStub::Frame& f)
 // CAN ID constants (mirror those in roadsterbmb.cpp)
 // ---------------------------------------------------------------------------
 static const uint32_t NodeBroadcastId      = 0x006;
-static const uint32_t IdentificationId     = 0x000;
 static const uint32_t VmsHandshakeId       = 0x380;
 static const uint32_t NodeReplyBaseId      = 0x30A;
 static const uint32_t CellAvgReplyBaseId   = 0x308; // base for cell avg msgs 0 and 1
@@ -119,16 +118,6 @@ void RoadsterBmbTest::TestCaseSetup()
 }
 
 // ---------------------------------------------------------------------------
-// Helper: call Update with time=1 so MebBms::Alive() returns true
-// (all lastReceived[] are 0, and (1 - 0) = 1 < 100).
-// ---------------------------------------------------------------------------
-static void DoUpdate()
-{
-   canStub->Clear(); // ignore frames from any prior setup
-   roadster->Update(*mebBms, 1);
-}
-
-// ---------------------------------------------------------------------------
 // Assert helpers
 // ---------------------------------------------------------------------------
 static bool FramePresent(uint32_t canId, uint8_t b0)
@@ -168,47 +157,6 @@ static bool FrameIs(uint32_t canId, const std::array<uint8_t, 8>& expected, uint
       }
    }
    return true;
-}
-
-// ---------------------------------------------------------------------------
-// Test: startup sends version frames after the 2-second delay
-// ---------------------------------------------------------------------------
-static void test_startup_version_frames()
-{
-   // Update at time=1 (startupTime gets set to 1, delay of 2s not elapsed yet)
-   canStub->Clear();
-   roadster->Update(*mebBms, 1);
-   bool sentEarly = canStub->FindFrame(0x601, 0x42) != nullptr;
-
-   // Update at time=3: (3 - 1) = 2 >= StartupHandshakeDelaySeconds (2) → broadcast
-   canStub->Clear();
-   roadster->Update(*mebBms, 3);
-   bool sent601 = canStub->FindFrame(0x601, 0x42) != nullptr;
-   bool sent609 = canStub->FindFrame(0x609, 0x43) != nullptr;
-   bool sent701 = canStub->FindFrame(0x701, 0x56) != nullptr;
-
-   ASSERT(!sentEarly);
-   ASSERT(sent601);
-   ASSERT(sent609);
-   ASSERT(sent701);
-}
-
-// ---------------------------------------------------------------------------
-// Test: 0x000 identification request triggers version frames immediately
-// ---------------------------------------------------------------------------
-static void test_identification_request_triggers_version()
-{
-   // Move past startup delay first
-   roadster->Update(*mebBms, 2);
-
-   // Now send identification request and check replies in the next Update
-   SendFrame(*canStub, IdentificationId, 0x00, 0x04, 0, 0, 0, 0, 0, 0, 2);
-
-   canStub->Clear();
-   roadster->Update(*mebBms, 60);
-   bool sent601 = canStub->FindFrame(0x601, 0x42) != nullptr;
-
-   ASSERT(sent601);
 }
 
 // ---------------------------------------------------------------------------
@@ -307,14 +255,15 @@ static void test_cell_avg_reply_on_0x25()
    // Fill MEB with 3000 mV cells
    FillMebVoltages(*canStub, 3000);
 
-   roadster->Update(*mebBms, 2); // process startup
+   roadster->Update(*mebBms, 2); // ensure MEB data is alive
 
    // Send the 0x25 broadcast request
    SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
 
-   // Update – should now send replies
+   // The implementation sends 3 sheets per Update() call; 4 calls cover all 11 sheets.
    canStub->Clear();
-   roadster->Update(*mebBms, 50);
+   for (int i = 0; i < 4; i++)
+      roadster->Update(*mebBms, 50 + static_cast<uint32_t>(i));
 
    // Each of the 11 sheets should reply with 3 messages (indices 0, 1, 2)
    // msgIdx 0,1 → CellAvgReplyBaseId + sheet*8; msgIdx 2 → NodeReplyBaseId + sheet*8
@@ -425,39 +374,15 @@ static void test_cell_avg_reply_suppressed_when_not_alive()
 }
 
 // ---------------------------------------------------------------------------
-// Test: replay of boot-log sequence – version frames appear before 0x380
-// ---------------------------------------------------------------------------
-static void test_boot_log_replay_version_then_handshake()
-{
-   // Simulate the boot sequence seen in the CAN log:
-   // 1. System boots, after 2+ seconds version frames are broadcast
-   // 2. 0x380 02 00 02 00 → BmbBroadcastReply
-
-   roadster->Update(*mebBms, 1); // startupTime = 1
-   // At time=3: (3-1)=2 >= delay → triggers version broadcast
-   roadster->Update(*mebBms, 3);
-   bool sentVersion = canStub->FindFrame(0x601, 0x42) != nullptr;
-
-   SendFrame(*canStub, VmsHandshakeId, 0x02, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 7);
-   canStub->Clear();
-   roadster->Update(*mebBms, 3);
-   bool sentBroadcastReply = canStub->FindFrame(VmsHandshakeId, 0x09) != nullptr;
-
-   ASSERT(sentVersion);
-   ASSERT(sentBroadcastReply);
-}
-
-// ---------------------------------------------------------------------------
 // Test: replay of fahrbereit-log sequence – 0x25 triggers 0x20 voltage replies
 // ---------------------------------------------------------------------------
 static void test_fahrbereit_log_replay_cell_avg()
 {
    // The fahrbereit log shows 0x006 0x25 0x00 0x02 0x01 requests.
-   // Fill MEB, complete startup, send the request, verify replies exist.
+   // Fill MEB, send the request, verify replies exist.
 
    FillMebVoltages(*canStub, 4020);
-   roadster->Update(*mebBms, 1); // startupTime = 1
-   roadster->Update(*mebBms, 3); // (3-1)=2 >= delay → startup handshake done
+   roadster->Update(*mebBms, 1);
 
    // Replicate: 00000006,4,25,00,02,01
    SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
@@ -473,8 +398,6 @@ static void test_fahrbereit_log_replay_cell_avg()
 // Registration
 // ---------------------------------------------------------------------------
 REGISTER_TEST(RoadsterBmbTest,
-   test_startup_version_frames,
-   test_identification_request_triggers_version,
    test_vmsbmb_broadcast_reply,
    test_vmsbmb_request_reply,
    test_broadcast_info_reply,
@@ -483,6 +406,5 @@ REGISTER_TEST(RoadsterBmbTest,
    test_cell_avg_reply_on_0x25,
    test_cell_avg_reply_voltage_values,
    test_cell_avg_reply_suppressed_when_not_alive,
-   test_boot_log_replay_version_then_handshake,
    test_fahrbereit_log_replay_cell_avg
 );

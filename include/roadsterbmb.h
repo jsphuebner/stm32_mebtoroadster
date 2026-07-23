@@ -30,9 +30,6 @@ class RoadsterBmb : public CanCallback
          Param::PARAM_NUM cellReversal;
          Param::PARAM_NUM canPwrOk;
          Param::PARAM_NUM sheetAlarm;
-         Param::PARAM_NUM picPgm;
-         Param::PARAM_NUM picPgc;
-         Param::PARAM_NUM picPgd;
          Param::PARAM_NUM alarmReason;
          Param::PARAM_NUM alarmBrick;
       };
@@ -45,12 +42,6 @@ class RoadsterBmb : public CanCallback
       void HandleClear() override;
 
    private:
-      enum HandshakeState
-      {
-         HandshakeStartup,
-         HandshakeIdle,
-      };
-
       CanHardware* canHardware;
       CanMap map0;
       CanMap map1;
@@ -62,10 +53,6 @@ class RoadsterBmb : public CanCallback
          uint8_t len;
       };
 
-      HandshakeState handshakeState;
-      uint32_t lastVersionBroadcast;
-      uint32_t startupTime;
-      bool identificationPending;
       bool bmbRequestReplyPending;
       bool bmbBroadcastReplyPending;
 

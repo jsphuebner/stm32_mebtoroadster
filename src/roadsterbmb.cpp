@@ -25,9 +25,6 @@
       Param::bmb##sheet##_cell_reversal, \
       Param::bmb##sheet##_can_pwr_ok, \
       Param::bmb##sheet##_sheet_alarm, \
-      Param::bmb##sheet##_pic_pgm, \
-      Param::bmb##sheet##_pic_pgc, \
-      Param::bmb##sheet##_pic_pgd, \
       Param::bmb##sheet##_alarm_reason, \
       Param::bmb##sheet##_alarm_brick, \
    }
@@ -93,18 +90,12 @@ struct VersionFrame
    uint8_t data[8];
 };
 
-static const uint32_t IdentificationRequestId = 0x000; // VMS identification request observed before the BMB version replay.
-static const uint32_t VmsHandshakeId = 0x380; // VMS handshake command carrying the 00 02 08 00 00 10 trigger payload.
-// Observed BMB reply to VMS_BMB_Request (02 00 14 00 ..) in logs/26-07-17 Christians Roadster fahrbereit.csv.
-static const uint8_t BmbRequestReplyData[] = { 0x09, 0x74, 0x19, 0x29, 0x1B, 0x02 };
-// Observed BMB reply to VMS_BMB_Request_Broadcast (02 00 02 00 ..) in logs/26-07-17 Christians Roadster boot.csv.
-static const uint8_t BmbBroadcastReplyData[] = { 0x09, 0x46, 0x00, 0x00, 0x00, 0x01 };
-
 // Node IDs used by BMB sheets on the Roadster bus (one per sheet, stride 8).
 // Each sheet receives on 0x00A + sheet*8 and replies on 0x30A + sheet*8.
 // Cell average voltage replies split across two IDs per sheet:
 //   msgIdx 0,1 → 0x308 + sheet*8 (CellAvgReplyBaseId)
 //   msgIdx 2   → 0x30A + sheet*8 (NodeReplyBaseId)
+static const uint32_t VmsHandshakeId = 0x380; // VMS handshake command carrying the 00 02 08 00 00 10 trigger payload.
 static const uint32_t NodeBroadcastId = 0x006;
 static const uint32_t NodeBaseId = 0x00A;
 static const uint32_t NodeReplyBaseId = 0x30A;
@@ -137,13 +128,13 @@ static const FirmwareInfoEntry firmwareInfo[] =
    { 0x46, 0x02, { 0x31, 0x32, 0x34, 0x32, 0x2D, 0x30 } }, // HW version "1242-0"
    { 0x4C, 0x02, { 0x30, 0x20, 0x41, 0x43, 0xFF, 0xFF } }, // HW version "0 AC"
 };
-// RoadsterBmb::Update() receives rtc_get_counter_val(), so these are RTC seconds.
-static const uint32_t VersionBroadcastPeriodSeconds = 60;
-static const uint32_t StartupHandshakeDelaySeconds = 2;
+// Observed BMB reply to VMS_BMB_Request (02 00 14 00 ..) in logs/26-07-17 Christians Roadster fahrbereit.csv.
+static const uint8_t BmbRequestReplyData[] = { 0x09, 0x74, 0x19, 0x29, 0x1B, 0x02 };
+// Observed BMB reply to VMS_BMB_Request_Broadcast (02 00 02 00 ..) in logs/26-07-17 Christians Roadster boot.csv.
+static const uint8_t BmbBroadcastReplyData[] = { 0x09, 0x46, 0x00, 0x00, 0x00, 0x01 };
 
 RoadsterBmb::RoadsterBmb(CanHardware* txCan)
-   : canHardware(txCan), map0(txCan, false), map1(txCan, false), handshakeState(HandshakeStartup),
-     lastVersionBroadcast(0), startupTime(0), identificationPending(false),
+   : canHardware(txCan), map0(txCan, false), map1(txCan, false),
      bmbRequestReplyPending(false), bmbBroadcastReplyPending(false),
      broadcastEchoPending(false), broadcastEchoData{0, 0, 0},
      broadcastInfoPending(false), broadcastCapabilityPending(false), broadcastDisconnectPending(false),
@@ -168,11 +159,7 @@ void RoadsterBmb::HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc)
 {
    const uint8_t* bytes = reinterpret_cast<uint8_t*>(data);
 
-   if (canId == IdentificationRequestId && dlc >= 2 && bytes[0] == 0x00 && bytes[1] == 0x04)
-   {
-      identificationPending = true;
-   }
-   else if (canId == VmsHandshakeId && dlc >= 7 &&
+   if (canId == VmsHandshakeId && dlc >= 7 &&
             bytes[0] == 0x02 && bytes[1] == 0x00 &&
             bytes[2] == 0x14 && bytes[3] == 0x00)
    {
@@ -188,7 +175,7 @@ void RoadsterBmb::HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc)
             bytes[0] == 0x00 && bytes[1] == 0x02 && bytes[2] == 0x08 &&
             bytes[3] == 0x00 && bytes[4] == 0x00 && bytes[5] == 0x10)
    {
-      identificationPending = true;
+      bmbBroadcastReplyPending = true;
    }
    else if (canId == NodeBroadcastId)
    {
@@ -251,7 +238,6 @@ void RoadsterBmb::HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc)
 
 void RoadsterBmb::HandleClear()
 {
-   canHardware->RegisterUserMessage(IdentificationRequestId);
    canHardware->RegisterUserMessage(VmsHandshakeId);
    canHardware->RegisterUserMessage(NodeBroadcastId);
 
@@ -261,9 +247,6 @@ void RoadsterBmb::HandleClear()
 
 void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
 {
-   if (handshakeState == HandshakeStartup && startupTime == 0)
-      startupTime = time;
-
    const bool alive = mebBms.Alive(time);
 
    for (int sheet = 0; sheet < NumSheets; sheet++)
@@ -392,9 +375,6 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
       Param::SetInt(params.cellReversal, cellReversalOk);
       Param::SetInt(params.canPwrOk, 1);
       Param::SetInt(params.sheetAlarm, sheetAlarmOk);
-      Param::SetInt(params.picPgm, 1);
-      Param::SetInt(params.picPgc, 1);
-      Param::SetInt(params.picPgd, 1);
       Param::SetInt(params.alarmReason, alarmReason);
       Param::SetInt(params.alarmBrick, alarmBrick);
    }
@@ -402,7 +382,7 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
    SendBroadcastReplies();
    SendDirectedReplies();
 
-   if (broadcastCellAvgPending >= 10)
+   if (broadcastCellAvgPending >= 1)
    {
       if (alive)
       {
@@ -433,6 +413,24 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
 
 void RoadsterBmb::SendBroadcastReplies()
 {
+   if (bmbRequestReplyPending)
+   {
+      uint8_t data[sizeof(BmbRequestReplyData)];
+      for (unsigned int i = 0; i < sizeof(BmbRequestReplyData); i++)
+         data[i] = BmbRequestReplyData[i];
+      canHardware->Send(VmsHandshakeId, data, sizeof(BmbRequestReplyData));
+      bmbRequestReplyPending = false;
+   }
+
+   if (bmbBroadcastReplyPending)
+   {
+      uint8_t data[sizeof(BmbBroadcastReplyData)];
+      for (unsigned int i = 0; i < sizeof(BmbBroadcastReplyData); i++)
+         data[i] = BmbBroadcastReplyData[i];
+      canHardware->Send(VmsHandshakeId, data, sizeof(BmbBroadcastReplyData));
+      bmbBroadcastReplyPending = false;
+   }
+
    // Iterate over all 11 sheet reply channels for each pending broadcast type.
    if (broadcastEchoPending)
    {
@@ -573,9 +571,6 @@ void RoadsterBmb::ClearSheet(const SheetParams& params, int alarmReason)
    Param::SetInt(params.cellReversal, 1);
    Param::SetInt(params.canPwrOk, 0);
    Param::SetInt(params.sheetAlarm, 0);
-   Param::SetInt(params.picPgm, 1);
-   Param::SetInt(params.picPgc, 1);
-   Param::SetInt(params.picPgd, 1);
    Param::SetInt(params.alarmReason, alarmReason);
    Param::SetInt(params.alarmBrick, 0);
 }

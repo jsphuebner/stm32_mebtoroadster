@@ -83,9 +83,6 @@
     VALUE_ENTRY(bmb1_cell_reversal, "bit", 2117) \
     VALUE_ENTRY(bmb1_can_pwr_ok, "bit", 2118) \
     VALUE_ENTRY(bmb1_sheet_alarm, "bit", 2119) \
-    VALUE_ENTRY(bmb1_pic_pgm, "bit", 2120) \
-    VALUE_ENTRY(bmb1_pic_pgc, "bit", 2121) \
-    VALUE_ENTRY(bmb1_pic_pgd, "bit", 2122) \
     VALUE_ENTRY(bmb1_alarm_reason, "id", 2123) \
     VALUE_ENTRY(bmb1_alarm_brick, "id", 2124) \
     VALUE_ENTRY(bmb2_bal_min_v, "raw", 2125) \
@@ -108,9 +105,6 @@
     VALUE_ENTRY(bmb2_cell_reversal, "bit", 2142) \
     VALUE_ENTRY(bmb2_can_pwr_ok, "bit", 2143) \
     VALUE_ENTRY(bmb2_sheet_alarm, "bit", 2144) \
-    VALUE_ENTRY(bmb2_pic_pgm, "bit", 2145) \
-    VALUE_ENTRY(bmb2_pic_pgc, "bit", 2146) \
-    VALUE_ENTRY(bmb2_pic_pgd, "bit", 2147) \
     VALUE_ENTRY(bmb2_alarm_reason, "id", 2148) \
     VALUE_ENTRY(bmb2_alarm_brick, "id", 2149) \
     VALUE_ENTRY(bmb3_bal_min_v, "raw", 2150) \
@@ -133,9 +127,6 @@
     VALUE_ENTRY(bmb3_cell_reversal, "bit", 2167) \
     VALUE_ENTRY(bmb3_can_pwr_ok, "bit", 2168) \
     VALUE_ENTRY(bmb3_sheet_alarm, "bit", 2169) \
-    VALUE_ENTRY(bmb3_pic_pgm, "bit", 2170) \
-    VALUE_ENTRY(bmb3_pic_pgc, "bit", 2171) \
-    VALUE_ENTRY(bmb3_pic_pgd, "bit", 2172) \
     VALUE_ENTRY(bmb3_alarm_reason, "id", 2173) \
     VALUE_ENTRY(bmb3_alarm_brick, "id", 2174) \
     VALUE_ENTRY(bmb4_bal_min_v, "raw", 2175) \
@@ -158,9 +149,6 @@
     VALUE_ENTRY(bmb4_cell_reversal, "bit", 2192) \
     VALUE_ENTRY(bmb4_can_pwr_ok, "bit", 2193) \
     VALUE_ENTRY(bmb4_sheet_alarm, "bit", 2194) \
-    VALUE_ENTRY(bmb4_pic_pgm, "bit", 2195) \
-    VALUE_ENTRY(bmb4_pic_pgc, "bit", 2196) \
-    VALUE_ENTRY(bmb4_pic_pgd, "bit", 2197) \
     VALUE_ENTRY(bmb4_alarm_reason, "id", 2198) \
     VALUE_ENTRY(bmb4_alarm_brick, "id", 2199) \
     VALUE_ENTRY(bmb5_bal_min_v, "raw", 2200) \
@@ -183,9 +171,6 @@
     VALUE_ENTRY(bmb5_cell_reversal, "bit", 2217) \
     VALUE_ENTRY(bmb5_can_pwr_ok, "bit", 2218) \
     VALUE_ENTRY(bmb5_sheet_alarm, "bit", 2219) \
-    VALUE_ENTRY(bmb5_pic_pgm, "bit", 2220) \
-    VALUE_ENTRY(bmb5_pic_pgc, "bit", 2221) \
-    VALUE_ENTRY(bmb5_pic_pgd, "bit", 2222) \
     VALUE_ENTRY(bmb5_alarm_reason, "id", 2223) \
     VALUE_ENTRY(bmb5_alarm_brick, "id", 2224) \
     VALUE_ENTRY(bmb6_bal_min_v, "raw", 2225) \
@@ -208,9 +193,6 @@
     VALUE_ENTRY(bmb6_cell_reversal, "bit", 2242) \
     VALUE_ENTRY(bmb6_can_pwr_ok, "bit", 2243) \
     VALUE_ENTRY(bmb6_sheet_alarm, "bit", 2244) \
-    VALUE_ENTRY(bmb6_pic_pgm, "bit", 2245) \
-    VALUE_ENTRY(bmb6_pic_pgc, "bit", 2246) \
-    VALUE_ENTRY(bmb6_pic_pgd, "bit", 2247) \
     VALUE_ENTRY(bmb6_alarm_reason, "id", 2248) \
     VALUE_ENTRY(bmb6_alarm_brick, "id", 2249) \
     VALUE_ENTRY(bmb7_bal_min_v, "raw", 2250) \
@@ -233,9 +215,6 @@
     VALUE_ENTRY(bmb7_cell_reversal, "bit", 2267) \
     VALUE_ENTRY(bmb7_can_pwr_ok, "bit", 2268) \
     VALUE_ENTRY(bmb7_sheet_alarm, "bit", 2269) \
-    VALUE_ENTRY(bmb7_pic_pgm, "bit", 2270) \
-    VALUE_ENTRY(bmb7_pic_pgc, "bit", 2271) \
-    VALUE_ENTRY(bmb7_pic_pgd, "bit", 2272) \
     VALUE_ENTRY(bmb7_alarm_reason, "id", 2273) \
     VALUE_ENTRY(bmb7_alarm_brick, "id", 2274) \
     VALUE_ENTRY(bmb8_bal_min_v, "raw", 2275) \
@@ -258,9 +237,6 @@
     VALUE_ENTRY(bmb8_cell_reversal, "bit", 2292) \
     VALUE_ENTRY(bmb8_can_pwr_ok, "bit", 2293) \
     VALUE_ENTRY(bmb8_sheet_alarm, "bit", 2294) \
-    VALUE_ENTRY(bmb8_pic_pgm, "bit", 2295) \
-    VALUE_ENTRY(bmb8_pic_pgc, "bit", 2296) \
-    VALUE_ENTRY(bmb8_pic_pgd, "bit", 2297) \
     VALUE_ENTRY(bmb8_alarm_reason, "id", 2298) \
     VALUE_ENTRY(bmb8_alarm_brick, "id", 2299) \
     VALUE_ENTRY(bmb9_bal_min_v, "raw", 2300) \
@@ -283,9 +259,6 @@
     VALUE_ENTRY(bmb9_cell_reversal, "bit", 2317) \
     VALUE_ENTRY(bmb9_can_pwr_ok, "bit", 2318) \
     VALUE_ENTRY(bmb9_sheet_alarm, "bit", 2319) \
-    VALUE_ENTRY(bmb9_pic_pgm, "bit", 2320) \
-    VALUE_ENTRY(bmb9_pic_pgc, "bit", 2321) \
-    VALUE_ENTRY(bmb9_pic_pgd, "bit", 2322) \
     VALUE_ENTRY(bmb9_alarm_reason, "id", 2323) \
     VALUE_ENTRY(bmb9_alarm_brick, "id", 2324) \
     VALUE_ENTRY(bmb10_bal_min_v, "raw", 2325) \
@@ -308,9 +281,6 @@
     VALUE_ENTRY(bmb10_cell_reversal, "bit", 2342) \
     VALUE_ENTRY(bmb10_can_pwr_ok, "bit", 2343) \
     VALUE_ENTRY(bmb10_sheet_alarm, "bit", 2344) \
-    VALUE_ENTRY(bmb10_pic_pgm, "bit", 2345) \
-    VALUE_ENTRY(bmb10_pic_pgc, "bit", 2346) \
-    VALUE_ENTRY(bmb10_pic_pgd, "bit", 2347) \
     VALUE_ENTRY(bmb10_alarm_reason, "id", 2348) \
     VALUE_ENTRY(bmb10_alarm_brick, "id", 2349) \
     VALUE_ENTRY(bmb11_bal_min_v, "raw", 2350) \
@@ -333,9 +303,6 @@
     VALUE_ENTRY(bmb11_cell_reversal, "bit", 2367) \
     VALUE_ENTRY(bmb11_can_pwr_ok, "bit", 2368) \
     VALUE_ENTRY(bmb11_sheet_alarm, "bit", 2369) \
-    VALUE_ENTRY(bmb11_pic_pgm, "bit", 2370) \
-    VALUE_ENTRY(bmb11_pic_pgc, "bit", 2371) \
-    VALUE_ENTRY(bmb11_pic_pgd, "bit", 2372) \
     VALUE_ENTRY(bmb11_alarm_reason, "id", 2373) \
     VALUE_ENTRY(bmb11_alarm_brick, "id", 2374) \
     VALUE_ENTRY(cdm_bat_vtg,    "V",   2375) \
