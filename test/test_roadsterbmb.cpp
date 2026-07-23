@@ -46,7 +46,6 @@ static std::ostream& operator<<(std::ostream& o, const MultiCanStub::Frame& f)
 // CAN ID constants (mirror those in roadsterbmb.cpp)
 // ---------------------------------------------------------------------------
 static const uint32_t NodeBroadcastId      = 0x006;
-static const uint32_t VmsHandshakeId       = 0x380;
 static const uint32_t NodeReplyBaseId      = 0x30A;
 static const uint32_t CellAvgReplyBaseId   = 0x308; // base for cell avg msgs 0 and 1
 static const uint32_t NodeIdStride         = 8;
@@ -157,38 +156,6 @@ static bool FrameIs(uint32_t canId, const std::array<uint8_t, 8>& expected, uint
       }
    }
    return true;
-}
-
-// ---------------------------------------------------------------------------
-// Test: 0x380 02 00 02 00 triggers BmbBroadcastReply (09 46 00 00 00 01)
-// ---------------------------------------------------------------------------
-static void test_vmsbmb_broadcast_reply()
-{
-   roadster->Update(*mebBms, 2); // past startup
-
-   SendFrame(*canStub, VmsHandshakeId, 0x02, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 7);
-
-   canStub->Clear();
-   roadster->Update(*mebBms, 3);
-
-   ASSERT(FrameIs(VmsHandshakeId,
-                  { 0x09, 0x46, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00 }, 6));
-}
-
-// ---------------------------------------------------------------------------
-// Test: 0x380 02 00 14 00 triggers BmbRequestReply (09 74 19 29 1B 02)
-// ---------------------------------------------------------------------------
-static void test_vmsbmb_request_reply()
-{
-   roadster->Update(*mebBms, 2);
-
-   SendFrame(*canStub, VmsHandshakeId, 0x02, 0x00, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 7);
-
-   canStub->Clear();
-   roadster->Update(*mebBms, 3);
-
-   ASSERT(FrameIs(VmsHandshakeId,
-                  { 0x09, 0x74, 0x19, 0x29, 0x1B, 0x02, 0x00, 0x00 }, 6));
 }
 
 // ---------------------------------------------------------------------------
@@ -398,8 +365,6 @@ static void test_fahrbereit_log_replay_cell_avg()
 // Registration
 // ---------------------------------------------------------------------------
 REGISTER_TEST(RoadsterBmbTest,
-   test_vmsbmb_broadcast_reply,
-   test_vmsbmb_request_reply,
    test_broadcast_info_reply,
    test_broadcast_capability_reply,
    test_directed_presence_reply,

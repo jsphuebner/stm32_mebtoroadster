@@ -83,19 +83,11 @@ static uint32_t TemperatureCanId(int sheet)
    return 0x8C + (sheet * 8);
 }
 
-struct VersionFrame
-{
-   uint32_t canId;
-   uint8_t len;
-   uint8_t data[8];
-};
-
 // Node IDs used by BMB sheets on the Roadster bus (one per sheet, stride 8).
 // Each sheet receives on 0x00A + sheet*8 and replies on 0x30A + sheet*8.
 // Cell average voltage replies split across two IDs per sheet:
 //   msgIdx 0,1 → 0x308 + sheet*8 (CellAvgReplyBaseId)
 //   msgIdx 2   → 0x30A + sheet*8 (NodeReplyBaseId)
-static const uint32_t VmsHandshakeId = 0x380; // VMS handshake command carrying the 00 02 08 00 00 10 trigger payload.
 static const uint32_t NodeBroadcastId = 0x006;
 static const uint32_t NodeBaseId = 0x00A;
 static const uint32_t NodeReplyBaseId = 0x30A;
@@ -128,14 +120,8 @@ static const FirmwareInfoEntry firmwareInfo[] =
    { 0x46, 0x02, { 0x31, 0x32, 0x34, 0x32, 0x2D, 0x30 } }, // HW version "1242-0"
    { 0x4C, 0x02, { 0x30, 0x20, 0x41, 0x43, 0xFF, 0xFF } }, // HW version "0 AC"
 };
-// Observed BMB reply to VMS_BMB_Request (02 00 14 00 ..) in logs/26-07-17 Christians Roadster fahrbereit.csv.
-static const uint8_t BmbRequestReplyData[] = { 0x09, 0x74, 0x19, 0x29, 0x1B, 0x02 };
-// Observed BMB reply to VMS_BMB_Request_Broadcast (02 00 02 00 ..) in logs/26-07-17 Christians Roadster boot.csv.
-static const uint8_t BmbBroadcastReplyData[] = { 0x09, 0x46, 0x00, 0x00, 0x00, 0x01 };
-
 RoadsterBmb::RoadsterBmb(CanHardware* txCan)
    : canHardware(txCan), map0(txCan, false), map1(txCan, false),
-     bmbRequestReplyPending(false), bmbBroadcastReplyPending(false),
      broadcastEchoPending(false), broadcastEchoData{0, 0, 0},
      broadcastInfoPending(false), broadcastCapabilityPending(false), broadcastDisconnectPending(false),
      broadcastCellAvgPending(0), cellAvgSheetOffset(0), canMapSendIdx(0)
@@ -159,25 +145,7 @@ void RoadsterBmb::HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc)
 {
    const uint8_t* bytes = reinterpret_cast<uint8_t*>(data);
 
-   if (canId == VmsHandshakeId && dlc >= 7 &&
-            bytes[0] == 0x02 && bytes[1] == 0x00 &&
-            bytes[2] == 0x14 && bytes[3] == 0x00)
-   {
-      bmbRequestReplyPending = true;
-   }
-   else if (canId == VmsHandshakeId && dlc >= 7 &&
-            bytes[0] == 0x02 && bytes[1] == 0x00 &&
-            bytes[2] == 0x02 && bytes[3] == 0x00)
-   {
-      bmbBroadcastReplyPending = true;
-   }
-   else if (canId == VmsHandshakeId && dlc >= 6 &&
-            bytes[0] == 0x00 && bytes[1] == 0x02 && bytes[2] == 0x08 &&
-            bytes[3] == 0x00 && bytes[4] == 0x00 && bytes[5] == 0x10)
-   {
-      bmbBroadcastReplyPending = true;
-   }
-   else if (canId == NodeBroadcastId)
+   if (canId == NodeBroadcastId)
    {
       // Broadcast to all BMB nodes: queue reply that will be sent on all 0x30X channels.
       if (dlc >= 3 && bytes[0] == 0x1E)
@@ -238,7 +206,6 @@ void RoadsterBmb::HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc)
 
 void RoadsterBmb::HandleClear()
 {
-   canHardware->RegisterUserMessage(VmsHandshakeId);
    canHardware->RegisterUserMessage(NodeBroadcastId);
 
    for (int i = 0; i < NumSheets; i++)
@@ -413,24 +380,6 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
 
 void RoadsterBmb::SendBroadcastReplies()
 {
-   if (bmbRequestReplyPending)
-   {
-      uint8_t data[sizeof(BmbRequestReplyData)];
-      for (unsigned int i = 0; i < sizeof(BmbRequestReplyData); i++)
-         data[i] = BmbRequestReplyData[i];
-      canHardware->Send(VmsHandshakeId, data, sizeof(BmbRequestReplyData));
-      bmbRequestReplyPending = false;
-   }
-
-   if (bmbBroadcastReplyPending)
-   {
-      uint8_t data[sizeof(BmbBroadcastReplyData)];
-      for (unsigned int i = 0; i < sizeof(BmbBroadcastReplyData); i++)
-         data[i] = BmbBroadcastReplyData[i];
-      canHardware->Send(VmsHandshakeId, data, sizeof(BmbBroadcastReplyData));
-      bmbBroadcastReplyPending = false;
-   }
-
    // Iterate over all 11 sheet reply channels for each pending broadcast type.
    if (broadcastEchoPending)
    {

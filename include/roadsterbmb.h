@@ -53,9 +53,6 @@ class RoadsterBmb : public CanCallback
          uint8_t len;
       };
 
-      bool bmbRequestReplyPending;
-      bool bmbBroadcastReplyPending;
-
       // 0x006 broadcast pending replies (sent to all nodes on the next Update() call)
       bool broadcastEchoPending;
       uint8_t broadcastEchoData[3];
