@@ -75,7 +75,7 @@ class RoadsterBmb : public CanCallback
       bool broadcastInfoPending;
       bool broadcastCapabilityPending;
       bool broadcastDisconnectPending;
-      bool broadcastCellAvgPending; // 0x25 -> reply with 0x20 cell voltage messages
+      int broadcastCellAvgPending; // 0x25 -> reply with 0x20 cell voltage messages
       int cellAvgSheetOffset;       // next sheet to send in the current cell-avg reply burst
       uint8_t canMapSendIdx;        // rolling index for spreading CanMap SendByIndex across Update() calls
 
@@ -84,10 +84,6 @@ class RoadsterBmb : public CanCallback
 
       void ClearSheet(const SheetParams& params, int alarmReason);
       void InitCanMap();
-      void SendIdentification();
-      void SendVersionFrames();
-      void SendBmbRequestReply();
-      void SendBmbBroadcastReply();
       void SendBroadcastReplies();
       void SendBroadcastCellAvgReplies(MebBms& mebBms, int startSheet, int numSheets);
       void SendDirectedReplies();
