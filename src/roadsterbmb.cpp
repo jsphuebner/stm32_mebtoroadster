@@ -25,9 +25,6 @@
       Param::bmb##sheet##_cell_reversal, \
       Param::bmb##sheet##_can_pwr_ok, \
       Param::bmb##sheet##_sheet_alarm, \
-      Param::bmb##sheet##_pic_pgm, \
-      Param::bmb##sheet##_pic_pgc, \
-      Param::bmb##sheet##_pic_pgd, \
       Param::bmb##sheet##_alarm_reason, \
       Param::bmb##sheet##_alarm_brick, \
    }
@@ -48,6 +45,9 @@ static const RoadsterBmb::SheetParams sheetParams[RoadsterBmb::NumSheets] =
 };
 static const int RoadsterBricksPerSheet = 9;
 static const int RoadsterThermistorsPerSheet = 6;
+// Thermistors 4 and 5 are internal to the BMB; only thermistors 0-3 are
+// external sensors used for min/max reporting.
+static const int RoadsterExternalThermistorsPerSheet = 4;
 static const int TotalRoadsterBricks = RoadsterBmb::NumSheets * RoadsterBricksPerSheet;
 static const int MebThermistors = MebBms::NumCells / 12;
 static const int TotalRoadsterThermistors = RoadsterBmb::NumSheets * RoadsterThermistorsPerSheet;
@@ -86,25 +86,6 @@ static uint32_t TemperatureCanId(int sheet)
    return 0x8C + (sheet * 8);
 }
 
-static uint32_t StatusCanId(int sheet)
-{
-   return 0x8E + (sheet * 8);
-}
-
-struct VersionFrame
-{
-   uint32_t canId;
-   uint8_t len;
-   uint8_t data[8];
-};
-
-static const uint32_t IdentificationRequestId = 0x000; // VMS identification request observed before the BMB version replay.
-static const uint32_t VmsHandshakeId = 0x380; // VMS handshake command carrying the 00 02 08 00 00 10 trigger payload.
-// Observed BMB reply to VMS_BMB_Request (02 00 14 00 ..) in logs/26-07-17 Christians Roadster fahrbereit.csv.
-static const uint8_t BmbRequestReplyData[] = { 0x09, 0x74, 0x19, 0x29, 0x1B, 0x02 };
-// Observed BMB reply to VMS_BMB_Request_Broadcast (02 00 02 00 ..) in logs/26-07-17 Christians Roadster boot.csv.
-static const uint8_t BmbBroadcastReplyData[] = { 0x09, 0x46, 0x00, 0x00, 0x00, 0x01 };
-
 // Node IDs used by BMB sheets on the Roadster bus (one per sheet, stride 8).
 // Each sheet receives on 0x00A + sheet*8 and replies on 0x30A + sheet*8.
 // Cell average voltage replies split across two IDs per sheet:
@@ -142,23 +123,11 @@ static const FirmwareInfoEntry firmwareInfo[] =
    { 0x46, 0x02, { 0x31, 0x32, 0x34, 0x32, 0x2D, 0x30 } }, // HW version "1242-0"
    { 0x4C, 0x02, { 0x30, 0x20, 0x41, 0x43, 0xFF, 0xFF } }, // HW version "0 AC"
 };
-// RoadsterBmb::Update() receives rtc_get_counter_val(), so these are RTC seconds.
-static const uint32_t VersionBroadcastPeriodSeconds = 60;
-static const uint32_t StartupHandshakeDelaySeconds = 2;
-static const VersionFrame versionFrames[] =
-{
-   { 0x601, 8, { 0x42, 0x53, 0x4D, 0x20, 0x52, 0x30, 0x00, 0x40 } },
-   { 0x609, 8, { 0x43, 0x53, 0x42, 0x2D, 0x52, 0x32, 0x00, 0x41 } },
-   { 0x701, 8, { 0x56, 0x49, 0x4F, 0x2D, 0x52, 0x34, 0x00, 0x60 } },
-};
-
 RoadsterBmb::RoadsterBmb(CanHardware* txCan)
-   : canHardware(txCan), map0(txCan, false), map1(txCan, false), handshakeState(HandshakeStartup),
-     lastVersionBroadcast(0), startupTime(0), identificationPending(false),
-     bmbRequestReplyPending(false), bmbBroadcastReplyPending(false),
+   : canHardware(txCan), map0(txCan, false), map1(txCan, false),
      broadcastEchoPending(false), broadcastEchoData{0, 0, 0},
      broadcastInfoPending(false), broadcastCapabilityPending(false), broadcastDisconnectPending(false),
-     broadcastCellAvgPending(false)
+     broadcastCellAvgPending(0), cellAvgSheetOffset(0), canMapSendIdx(0)
 {
    canMaps[0] = &map0;
    canMaps[1] = &map1;
@@ -175,39 +144,11 @@ RoadsterBmb::RoadsterBmb(CanHardware* txCan)
    HandleClear();
 }
 
-void RoadsterBmb::SendAll()
-{
-   for (int i = 0; i < NumCanMaps; i++)
-      canMaps[i]->SendAll();
-}
-
 void RoadsterBmb::HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc)
 {
    const uint8_t* bytes = reinterpret_cast<uint8_t*>(data);
 
-   if (canId == IdentificationRequestId && dlc >= 2 && bytes[0] == 0x00 && bytes[1] == 0x04)
-   {
-      identificationPending = true;
-   }
-   else if (canId == VmsHandshakeId && dlc >= 7 &&
-            bytes[0] == 0x02 && bytes[1] == 0x00 &&
-            bytes[2] == 0x14 && bytes[3] == 0x00)
-   {
-      bmbRequestReplyPending = true;
-   }
-   else if (canId == VmsHandshakeId && dlc >= 7 &&
-            bytes[0] == 0x02 && bytes[1] == 0x00 &&
-            bytes[2] == 0x02 && bytes[3] == 0x00)
-   {
-      bmbBroadcastReplyPending = true;
-   }
-   else if (canId == VmsHandshakeId && dlc >= 6 &&
-            bytes[0] == 0x00 && bytes[1] == 0x02 && bytes[2] == 0x08 &&
-            bytes[3] == 0x00 && bytes[4] == 0x00 && bytes[5] == 0x10)
-   {
-      identificationPending = true;
-   }
-   else if (canId == NodeBroadcastId)
+   if (canId == NodeBroadcastId)
    {
       // Broadcast to all BMB nodes: queue reply that will be sent on all 0x30X channels.
       if (dlc >= 3 && bytes[0] == 0x1E)
@@ -231,7 +172,8 @@ void RoadsterBmb::HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc)
       }
       else if (dlc >= 1 && bytes[0] == 0x25)
       {
-        broadcastCellAvgPending = true;
+        broadcastCellAvgPending++;
+        cellAvgSheetOffset = 0;
       }
    }
    else
@@ -267,8 +209,6 @@ void RoadsterBmb::HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc)
 
 void RoadsterBmb::HandleClear()
 {
-   canHardware->RegisterUserMessage(IdentificationRequestId);
-   canHardware->RegisterUserMessage(VmsHandshakeId);
    canHardware->RegisterUserMessage(NodeBroadcastId);
 
    for (int i = 0; i < NumSheets; i++)
@@ -277,14 +217,6 @@ void RoadsterBmb::HandleClear()
 
 void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
 {
-   if (handshakeState == HandshakeStartup && startupTime == 0)
-      startupTime = time;
-
-   const bool sendIdentification = identificationPending ||
-                                   (handshakeState == HandshakeStartup && (time - startupTime) >= StartupHandshakeDelaySeconds);
-   const bool sendVersionOnly = handshakeState == HandshakeIdle && !sendIdentification &&
-                                ((time - lastVersionBroadcast) >= VersionBroadcastPeriodSeconds);
-
    const bool alive = mebBms.Alive(time);
 
    for (int sheet = 0; sheet < NumSheets; sheet++)
@@ -351,18 +283,23 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
          const int mebThermistor = MappedThermistorIndex(sheet, therm);
          const int rawTemp = RawTemperature(mebBms.GetModuleTemperature(mebThermistor));
 
-         sumTempRaw += rawTemp;
+         sumTempRaw += 0x8000 - rawTemp;
 
-         if (rawTemp < minTempRaw)
+         // Thermistors 4 and 5 are internal to the BMB; exclude them from
+         // min/max tracking so tMinTherm/tMaxTherm stay within 0-3.
+         if (therm < RoadsterExternalThermistorsPerSheet)
          {
-            minTempRaw = rawTemp;
-            minTherm = therm;
-         }
+            if (rawTemp < minTempRaw)
+            {
+               minTempRaw = rawTemp;
+               minTherm = therm;
+            }
 
-         if (rawTemp > maxTempRaw)
-         {
-            maxTempRaw = rawTemp;
-            maxTherm = therm;
+            if (rawTemp > maxTempRaw)
+            {
+               maxTempRaw = rawTemp;
+               maxTherm = therm;
+            }
          }
       }
 
@@ -413,87 +350,41 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
       Param::SetInt(params.cellReversal, cellReversalOk);
       Param::SetInt(params.canPwrOk, 1);
       Param::SetInt(params.sheetAlarm, sheetAlarmOk);
-      Param::SetInt(params.picPgm, 1);
-      Param::SetInt(params.picPgc, 1);
-      Param::SetInt(params.picPgd, 1);
       Param::SetInt(params.alarmReason, alarmReason);
       Param::SetInt(params.alarmBrick, alarmBrick);
-   }
-
-   if (sendIdentification)
-   {
-      SendIdentification();
-      lastVersionBroadcast = time;
-      identificationPending = false;
-      handshakeState = HandshakeIdle;
-   }
-   else if (sendVersionOnly)
-   {
-      SendVersionFrames();
-      lastVersionBroadcast = time;
-   }
-
-   if (bmbBroadcastReplyPending)
-   {
-      SendBmbBroadcastReply();
-      bmbBroadcastReplyPending = false;
-   }
-
-   if (bmbRequestReplyPending)
-   {
-      SendBmbRequestReply();
-      bmbRequestReplyPending = false;
    }
 
    SendBroadcastReplies();
    SendDirectedReplies();
 
-   if (broadcastCellAvgPending)
+   // Logs show these frames are only emitted after every tenth 0x25 poll.
+   if (broadcastCellAvgPending >= 10)
    {
       if (alive)
-         SendBroadcastCellAvgReplies(mebBms);
-      broadcastCellAvgPending = false;
+      {
+         static const int CellAvgSheetsPerCycle = 3; // 3 msgs/sheet × 3 sheets = 9 frames, within half the 20-entry buffer
+         const int sheetsThisCycle = MIN(CellAvgSheetsPerCycle, NumSheets - cellAvgSheetOffset);
+         SendBroadcastCellAvgReplies(mebBms, cellAvgSheetOffset, sheetsThisCycle);
+         cellAvgSheetOffset += sheetsThisCycle;
+         if (cellAvgSheetOffset >= NumSheets)
+         {
+            broadcastCellAvgPending = 0;
+            cellAvgSheetOffset = 0;
+         }
+      }
+      else
+      {
+         broadcastCellAvgPending = 0;
+         cellAvgSheetOffset = 0;
+      }
    }
-   //SendAll();
-}
 
-void RoadsterBmb::SendIdentification()
-{
-   //SendAll();
-   SendVersionFrames();
-}
-
-void RoadsterBmb::SendVersionFrames()
-{
-   for (unsigned int i = 0; i < sizeof(versionFrames) / sizeof(versionFrames[0]); i++)
-   {
-      uint8_t data[8];
-
-      for (int j = 0; j < 8; j++)
-         data[j] = versionFrames[i].data[j];
-
-      canHardware->Send(versionFrames[i].canId, data, versionFrames[i].len);
-   }
-}
-
-void RoadsterBmb::SendBmbRequestReply()
-{
-   uint8_t data[sizeof(BmbRequestReplyData)];
-
-   for (unsigned int i = 0; i < sizeof(BmbRequestReplyData); i++)
-      data[i] = BmbRequestReplyData[i];
-
-   canHardware->Send(VmsHandshakeId, data, sizeof(BmbRequestReplyData));
-}
-
-void RoadsterBmb::SendBmbBroadcastReply()
-{
-   uint8_t data[sizeof(BmbBroadcastReplyData)];
-
-   for (unsigned int i = 0; i < sizeof(BmbBroadcastReplyData); i++)
-      data[i] = BmbBroadcastReplyData[i];
-
-   canHardware->Send(VmsHandshakeId, data, sizeof(BmbBroadcastReplyData));
+   // Spread CanMap transmissions across Update() calls to avoid overflowing the TX buffer.
+   // SendByIndex sends one CAN message per map (if that slot is populated), so at most
+   // NumCanMaps frames are queued per 10ms cycle — well within the 20-entry buffer limit.
+   for (int i = 0; i < NumCanMaps; i++)
+      canMaps[i]->SendByIndex(canMapSendIdx);
+   canMapSendIdx = (canMapSendIdx + 1) % MAX_MESSAGES;
 }
 
 void RoadsterBmb::SendBroadcastReplies()
@@ -560,17 +451,20 @@ void RoadsterBmb::SendDirectedReplies()
    }
 }
 
-void RoadsterBmb::SendBroadcastCellAvgReplies(MebBms& mebBms)
+void RoadsterBmb::SendBroadcastCellAvgReplies(MebBms& mebBms, int startSheet, int numSheets)
 {
    // For each sheet, send 3 messages of 3 bricks each, covering all 9 bricks.
    // Format per message: [0x20, msgIdx, v0_lo, v0_hi, v1_lo, v1_hi, v2_lo, v2_hi]
    // The Roadster protocol uses two CAN IDs per sheet for these messages:
    //   msgIdx 0,1 → CellAvgReplyBaseId + sheet*8 (= 0x308 + sheet*8)
    //   msgIdx 2   → NodeReplyBaseId    + sheet*8 (= 0x30A + sheet*8)
+   // Caller passes a startSheet/numSheets window to spread the 33 total frames
+   // (11 sheets × 3 msgs) across multiple Update() cycles without overflowing
+   // the 20-entry CAN TX buffer.
    static const int BricksPerMsg = 3;
    static const int MsgsPerSheet = (RoadsterBricksPerSheet + BricksPerMsg - 1) / BricksPerMsg; // = 3
 
-   for (int sheet = 0; sheet < NumSheets; sheet++)
+   for (int sheet = startSheet; sheet < startSheet + numSheets; sheet++)
    {
       for (int msgIdx = 0; msgIdx < MsgsPerSheet; msgIdx++)
       {
@@ -635,9 +529,6 @@ void RoadsterBmb::ClearSheet(const SheetParams& params, int alarmReason)
    Param::SetInt(params.cellReversal, 1);
    Param::SetInt(params.canPwrOk, 0);
    Param::SetInt(params.sheetAlarm, 0);
-   Param::SetInt(params.picPgm, 1);
-   Param::SetInt(params.picPgc, 1);
-   Param::SetInt(params.picPgd, 1);
    Param::SetInt(params.alarmReason, alarmReason);
    Param::SetInt(params.alarmBrick, 0);
 }
@@ -651,7 +542,6 @@ void RoadsterBmb::InitCanMap()
       const uint32_t balId = BalanceCanId(sheet);
       const uint32_t voltageId = VoltageCanId(sheet);
       const uint32_t tempId = TemperatureCanId(sheet);
-      const uint32_t statusId = StatusCanId(sheet);
 
       map.AddSend(params.balMinV, balId, 0, 16, 1);
       map.AddSend(params.balMinBrick, balId, 16, 8, 1);
@@ -669,18 +559,6 @@ void RoadsterBmb::InitCanMap()
       map.AddSend(params.tAvg, tempId, 32, 24, 1);
       map.AddSend(params.tMinTherm, tempId, 56, 4, 1);
       map.AddSend(params.tMaxTherm, tempId, 60, 4, 1);
-
-      map.AddSend(params.bleed, statusId, 0, 16, 1);
-      map.AddSend(params.daisyRx, statusId, 16, 1, 1);
-      map.AddSend(params.overV, statusId, 17, 1, 1);
-      map.AddSend(params.cellReversal, statusId, 18, 1, 1);
-      map.AddSend(params.canPwrOk, statusId, 19, 1, 1);
-      map.AddSend(params.sheetAlarm, statusId, 20, 1, 1);
-      map.AddSend(params.picPgm, statusId, 21, 1, 1);
-      map.AddSend(params.picPgc, statusId, 22, 1, 1);
-      map.AddSend(params.picPgd, statusId, 23, 1, 1);
-      map.AddSend(params.alarmReason, statusId, 24, 8, 1);
-      map.AddSend(params.alarmBrick, statusId, 32, 8, 1);
    }
 }
 

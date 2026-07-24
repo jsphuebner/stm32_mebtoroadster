@@ -30,9 +30,6 @@ class RoadsterBmb : public CanCallback
          Param::PARAM_NUM cellReversal;
          Param::PARAM_NUM canPwrOk;
          Param::PARAM_NUM sheetAlarm;
-         Param::PARAM_NUM picPgm;
-         Param::PARAM_NUM picPgc;
-         Param::PARAM_NUM picPgd;
          Param::PARAM_NUM alarmReason;
          Param::PARAM_NUM alarmBrick;
       };
@@ -41,17 +38,10 @@ class RoadsterBmb : public CanCallback
       static const int NumCanMaps = 2;
       explicit RoadsterBmb(CanHardware* txCan);
       void Update(MebBms& mebBms, uint32_t time);
-      void SendAll();
       void HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc) override;
       void HandleClear() override;
 
    private:
-      enum HandshakeState
-      {
-         HandshakeStartup,
-         HandshakeIdle,
-      };
-
       CanHardware* canHardware;
       CanMap map0;
       CanMap map1;
@@ -63,32 +53,23 @@ class RoadsterBmb : public CanCallback
          uint8_t len;
       };
 
-      HandshakeState handshakeState;
-      uint32_t lastVersionBroadcast;
-      uint32_t startupTime;
-      bool identificationPending;
-      bool bmbRequestReplyPending;
-      bool bmbBroadcastReplyPending;
-
       // 0x006 broadcast pending replies (sent to all nodes on the next Update() call)
       bool broadcastEchoPending;
       uint8_t broadcastEchoData[3];
       bool broadcastInfoPending;
       bool broadcastCapabilityPending;
       bool broadcastDisconnectPending;
-      bool broadcastCellAvgPending; // 0x25 -> reply with 0x20 cell voltage messages
+      int broadcastCellAvgPending; // 0x25 -> reply with 0x20 cell voltage messages
+      int cellAvgSheetOffset;       // next sheet to send in the current cell-avg reply burst
+      uint8_t canMapSendIdx;        // rolling index for spreading CanMap SendByIndex across Update() calls
 
       // Per-sheet directed pending replies (0x0A-0x5A -> 0x30A-0x35A)
       SheetReply directedReplies[NumSheets];
 
       void ClearSheet(const SheetParams& params, int alarmReason);
       void InitCanMap();
-      void SendIdentification();
-      void SendVersionFrames();
-      void SendBmbRequestReply();
-      void SendBmbBroadcastReply();
       void SendBroadcastReplies();
-      void SendBroadcastCellAvgReplies(MebBms& mebBms);
+      void SendBroadcastCellAvgReplies(MebBms& mebBms, int startSheet, int numSheets);
       void SendDirectedReplies();
       CanMap& MapForSheet(int sheet) { return *canMaps[(sheet * NumCanMaps) / NumSheets]; }
       static void FillFirmwareReply(uint8_t subLo, uint8_t subHi, uint8_t* buf);
