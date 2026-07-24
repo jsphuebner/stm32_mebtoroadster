@@ -92,6 +92,21 @@ static void FillMebVoltages(MultiCanStub& stub, uint32_t targetMv)
 }
 
 // ---------------------------------------------------------------------------
+// Inject a MEB module temperature so RoadsterBmb::Update() sees it.
+//
+// mebbms.cpp:  temps[cmu] = ((data[1] >> 4) & 0xFF) * 0.5f - 40
+// So rawValue = (tempDegC + 40) * 2, placed in bits [11:4] of data[1].
+// CAN ID for CMU index cmu is 0x1A5555F4 + cmu (cmu in 0..7).
+// ---------------------------------------------------------------------------
+static void FillMebTemperature(MultiCanStub& stub, int cmu, float tempDegC)
+{
+   uint32_t rawValue = static_cast<uint32_t>((tempDegC + 40.0f) * 2.0f);
+   gData[0] = 0;
+   gData[1] = (rawValue & 0xFF) << 4;
+   stub.HandleRx(0x1A5555F4u + static_cast<uint32_t>(cmu), gData, 8);
+}
+
+// ---------------------------------------------------------------------------
 // Test fixture
 // ---------------------------------------------------------------------------
 class RoadsterBmbTest : public UnitTest
@@ -408,6 +423,42 @@ static void test_fahrbereit_log_replay_cell_avg()
 }
 
 // ---------------------------------------------------------------------------
+// Test: tMinTherm/tMaxTherm are never set to 4 or 5 even when internal
+//       thermistors (indices 4 and 5) have the most extreme temperatures.
+//
+// Sheet 9 (zero-based) is chosen because its mapping separates external and
+// internal thermistors across different MEB CMUs:
+//   therms 0-3  → MEB CMU 6
+//   therms 4-5  → MEB CMU 7   (internal, must be excluded from min/max)
+//
+// If CMU 7 is much hotter than CMU 6, the pre-fix code would set tMaxTherm=4.
+// After the fix, tMaxTherm must remain ≤ 3.
+// ---------------------------------------------------------------------------
+static void test_internal_therms_excluded_from_min_max()
+{
+   FillMebVoltages(*canStub, 3000); // all cells valid so Update() runs the therm loop
+
+   // Set external thermistors (MEB CMU 6) to 25 °C and internal (CMU 7) to 60 °C.
+   for (int cmu = 0; cmu < 8; cmu++)
+      FillMebTemperature(*canStub, cmu, 25.0f);
+   FillMebTemperature(*canStub, 7, 60.0f); // internal therms for sheet 9 map here
+
+   roadster->Update(*mebBms, 2);
+
+   // Sheet 9 internally → bmb10_t_max_therm / bmb10_t_min_therm params.
+   const int tMaxTherm = Param::GetInt(Param::bmb10_t_max_therm);
+   const int tMinTherm = Param::GetInt(Param::bmb10_t_min_therm);
+
+   if (tMaxTherm > 3)
+      std::cout << "  bmb10_t_max_therm=" << tMaxTherm << " exceeds 3 (internal therm leaked into max)\n";
+   if (tMinTherm > 3)
+      std::cout << "  bmb10_t_min_therm=" << tMinTherm << " exceeds 3 (internal therm leaked into min)\n";
+
+   ASSERT(tMaxTherm <= 3);
+   ASSERT(tMinTherm <= 3);
+}
+
+// ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
 REGISTER_TEST(RoadsterBmbTest,
@@ -418,5 +469,6 @@ REGISTER_TEST(RoadsterBmbTest,
    test_cell_avg_reply_on_tenth_0x25,
    test_cell_avg_reply_voltage_values,
    test_cell_avg_reply_suppressed_when_not_alive,
-   test_fahrbereit_log_replay_cell_avg
+   test_fahrbereit_log_replay_cell_avg,
+   test_internal_therms_excluded_from_min_max
 );

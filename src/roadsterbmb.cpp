@@ -45,6 +45,9 @@ static const RoadsterBmb::SheetParams sheetParams[RoadsterBmb::NumSheets] =
 };
 static const int RoadsterBricksPerSheet = 9;
 static const int RoadsterThermistorsPerSheet = 6;
+// Thermistors 4 and 5 are internal to the BMB; only thermistors 0-3 are
+// external sensors used for min/max reporting.
+static const int RoadsterExternalThermistorsPerSheet = 4;
 static const int TotalRoadsterBricks = RoadsterBmb::NumSheets * RoadsterBricksPerSheet;
 static const int MebThermistors = MebBms::NumCells / 12;
 static const int TotalRoadsterThermistors = RoadsterBmb::NumSheets * RoadsterThermistorsPerSheet;
@@ -282,16 +285,21 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
 
          sumTempRaw += 0x8000 - rawTemp;
 
-         if (rawTemp < minTempRaw)
+         // Thermistors 4 and 5 are internal to the BMB; exclude them from
+         // min/max tracking so tMinTherm/tMaxTherm stay within 0-3.
+         if (therm < RoadsterExternalThermistorsPerSheet)
          {
-            minTempRaw = rawTemp;
-            minTherm = therm;
-         }
+            if (rawTemp < minTempRaw)
+            {
+               minTempRaw = rawTemp;
+               minTherm = therm;
+            }
 
-         if (rawTemp > maxTempRaw)
-         {
-            maxTempRaw = rawTemp;
-            maxTherm = therm;
+            if (rawTemp > maxTempRaw)
+            {
+               maxTempRaw = rawTemp;
+               maxTherm = therm;
+            }
          }
       }
 
