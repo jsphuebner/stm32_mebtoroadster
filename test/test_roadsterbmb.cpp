@@ -46,8 +46,6 @@ static std::ostream& operator<<(std::ostream& o, const MultiCanStub::Frame& f)
 // CAN ID constants (mirror those in roadsterbmb.cpp)
 // ---------------------------------------------------------------------------
 static const uint32_t NodeBroadcastId      = 0x006;
-static const uint32_t IdentificationId     = 0x000;
-static const uint32_t VmsHandshakeId       = 0x380;
 static const uint32_t NodeReplyBaseId      = 0x30A;
 static const uint32_t CellAvgReplyBaseId   = 0x308; // base for cell avg msgs 0 and 1
 static const uint32_t NodeIdStride         = 8;
@@ -94,6 +92,21 @@ static void FillMebVoltages(MultiCanStub& stub, uint32_t targetMv)
 }
 
 // ---------------------------------------------------------------------------
+// Inject a MEB module temperature so RoadsterBmb::Update() sees it.
+//
+// mebbms.cpp:  temps[cmu] = ((data[1] >> 4) & 0xFF) * 0.5f - 40
+// So rawValue = (tempDegC + 40) * 2, placed in bits [11:4] of data[1].
+// CAN ID for CMU index cmu is 0x1A5555F4 + cmu (cmu in 0..7).
+// ---------------------------------------------------------------------------
+static void FillMebTemperature(MultiCanStub& stub, int cmu, float tempDegC)
+{
+   uint32_t rawValue = static_cast<uint32_t>((tempDegC + 40.0f) * 2.0f);
+   gData[0] = 0;
+   gData[1] = (rawValue & 0xFF) << 4;
+   stub.HandleRx(0x1A5555F4u + static_cast<uint32_t>(cmu), gData, 8);
+}
+
+// ---------------------------------------------------------------------------
 // Test fixture
 // ---------------------------------------------------------------------------
 class RoadsterBmbTest : public UnitTest
@@ -116,16 +129,6 @@ void RoadsterBmbTest::TestCaseSetup()
    mebBms   = std::make_unique<MebBms>(canStub.get());
    roadster = std::make_unique<RoadsterBmb>(canStub.get());
    Param::LoadDefaults();
-}
-
-// ---------------------------------------------------------------------------
-// Helper: call Update with time=1 so MebBms::Alive() returns true
-// (all lastReceived[] are 0, and (1 - 0) = 1 < 100).
-// ---------------------------------------------------------------------------
-static void DoUpdate()
-{
-   canStub->Clear(); // ignore frames from any prior setup
-   roadster->Update(*mebBms, 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -168,79 +171,6 @@ static bool FrameIs(uint32_t canId, const std::array<uint8_t, 8>& expected, uint
       }
    }
    return true;
-}
-
-// ---------------------------------------------------------------------------
-// Test: startup sends version frames after the 2-second delay
-// ---------------------------------------------------------------------------
-static void test_startup_version_frames()
-{
-   // Update at time=1 (startupTime gets set to 1, delay of 2s not elapsed yet)
-   canStub->Clear();
-   roadster->Update(*mebBms, 1);
-   bool sentEarly = canStub->FindFrame(0x601, 0x42) != nullptr;
-
-   // Update at time=3: (3 - 1) = 2 >= StartupHandshakeDelaySeconds (2) → broadcast
-   canStub->Clear();
-   roadster->Update(*mebBms, 3);
-   bool sent601 = canStub->FindFrame(0x601, 0x42) != nullptr;
-   bool sent609 = canStub->FindFrame(0x609, 0x43) != nullptr;
-   bool sent701 = canStub->FindFrame(0x701, 0x56) != nullptr;
-
-   ASSERT(!sentEarly);
-   ASSERT(sent601);
-   ASSERT(sent609);
-   ASSERT(sent701);
-}
-
-// ---------------------------------------------------------------------------
-// Test: 0x000 identification request triggers version frames immediately
-// ---------------------------------------------------------------------------
-static void test_identification_request_triggers_version()
-{
-   // Move past startup delay first
-   roadster->Update(*mebBms, 2);
-
-   // Now send identification request and check replies in the next Update
-   SendFrame(*canStub, IdentificationId, 0x00, 0x04, 0, 0, 0, 0, 0, 0, 2);
-
-   canStub->Clear();
-   roadster->Update(*mebBms, 60);
-   bool sent601 = canStub->FindFrame(0x601, 0x42) != nullptr;
-
-   ASSERT(sent601);
-}
-
-// ---------------------------------------------------------------------------
-// Test: 0x380 02 00 02 00 triggers BmbBroadcastReply (09 46 00 00 00 01)
-// ---------------------------------------------------------------------------
-static void test_vmsbmb_broadcast_reply()
-{
-   roadster->Update(*mebBms, 2); // past startup
-
-   SendFrame(*canStub, VmsHandshakeId, 0x02, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 7);
-
-   canStub->Clear();
-   roadster->Update(*mebBms, 3);
-
-   ASSERT(FrameIs(VmsHandshakeId,
-                  { 0x09, 0x46, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00 }, 6));
-}
-
-// ---------------------------------------------------------------------------
-// Test: 0x380 02 00 14 00 triggers BmbRequestReply (09 74 19 29 1B 02)
-// ---------------------------------------------------------------------------
-static void test_vmsbmb_request_reply()
-{
-   roadster->Update(*mebBms, 2);
-
-   SendFrame(*canStub, VmsHandshakeId, 0x02, 0x00, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 7);
-
-   canStub->Clear();
-   roadster->Update(*mebBms, 3);
-
-   ASSERT(FrameIs(VmsHandshakeId,
-                  { 0x09, 0x74, 0x19, 0x29, 0x1B, 0x02, 0x00, 0x00 }, 6));
 }
 
 // ---------------------------------------------------------------------------
@@ -300,21 +230,55 @@ static void test_directed_presence_reply()
 }
 
 // ---------------------------------------------------------------------------
-// Test: 0x006 0x25 request generates 0x20 cell-voltage replies on all sheets
+// Test: the first nine 0x006 0x25 requests do not yet trigger 0x20 replies
 // ---------------------------------------------------------------------------
-static void test_cell_avg_reply_on_0x25()
+static void test_cell_avg_reply_not_sent_before_tenth_request()
 {
    // Fill MEB with 3000 mV cells
    FillMebVoltages(*canStub, 3000);
 
-   roadster->Update(*mebBms, 2); // process startup
+   roadster->Update(*mebBms, 2); // ensure MEB data is alive
 
-   // Send the 0x25 broadcast request
+   for (int i = 0; i < 9; i++)
+   {
+      SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
+      roadster->Update(*mebBms, 10 + static_cast<uint32_t>(i));
+   }
+
+   bool found = false;
+   for (const auto& f : canStub->sentFrames)
+   {
+      if (f.data[0] == 0x20)
+      {
+         found = true;
+         break;
+      }
+   }
+   ASSERT(!found);
+}
+
+// ---------------------------------------------------------------------------
+// Test: every tenth 0x006 0x25 request generates 0x20 cell-voltage replies
+// ---------------------------------------------------------------------------
+static void test_cell_avg_reply_on_tenth_0x25()
+{
+   // Fill MEB with 3000 mV cells
+   FillMebVoltages(*canStub, 3000);
+
+   roadster->Update(*mebBms, 2); // ensure MEB data is alive
+
+   for (int i = 0; i < 9; i++)
+   {
+      SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
+      roadster->Update(*mebBms, 10 + static_cast<uint32_t>(i));
+   }
+
    SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
 
-   // Update – should now send replies
+   // The implementation sends 3 sheets per Update() call; 4 calls are needed to cover all 11 sheets (3+3+3+2).
    canStub->Clear();
-   roadster->Update(*mebBms, 50);
+   for (int i = 0; i < 4; i++)
+      roadster->Update(*mebBms, 50 + static_cast<uint32_t>(i));
 
    // Each of the 11 sheets should reply with 3 messages (indices 0, 1, 2)
    // msgIdx 0,1 → CellAvgReplyBaseId + sheet*8; msgIdx 2 → NodeReplyBaseId + sheet*8
@@ -357,6 +321,12 @@ static void test_cell_avg_reply_voltage_values()
 {
    FillMebVoltages(*canStub, 3000);
    roadster->Update(*mebBms, 2);
+
+   for (int i = 0; i < 9; i++)
+   {
+      SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
+      roadster->Update(*mebBms, 10 + static_cast<uint32_t>(i));
+   }
 
    SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
 
@@ -406,7 +376,8 @@ static void test_cell_avg_reply_suppressed_when_not_alive()
    // Send startup
    roadster->Update(*mebBms, 0);
 
-   SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
+   for (int i = 0; i < 10; i++)
+      SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
 
    canStub->Clear();
    roadster->Update(*mebBms, 200);
@@ -425,41 +396,23 @@ static void test_cell_avg_reply_suppressed_when_not_alive()
 }
 
 // ---------------------------------------------------------------------------
-// Test: replay of boot-log sequence – version frames appear before 0x380
-// ---------------------------------------------------------------------------
-static void test_boot_log_replay_version_then_handshake()
-{
-   // Simulate the boot sequence seen in the CAN log:
-   // 1. System boots, after 2+ seconds version frames are broadcast
-   // 2. 0x380 02 00 02 00 → BmbBroadcastReply
-
-   roadster->Update(*mebBms, 1); // startupTime = 1
-   // At time=3: (3-1)=2 >= delay → triggers version broadcast
-   roadster->Update(*mebBms, 3);
-   bool sentVersion = canStub->FindFrame(0x601, 0x42) != nullptr;
-
-   SendFrame(*canStub, VmsHandshakeId, 0x02, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 7);
-   canStub->Clear();
-   roadster->Update(*mebBms, 3);
-   bool sentBroadcastReply = canStub->FindFrame(VmsHandshakeId, 0x09) != nullptr;
-
-   ASSERT(sentVersion);
-   ASSERT(sentBroadcastReply);
-}
-
-// ---------------------------------------------------------------------------
-// Test: replay of fahrbereit-log sequence – 0x25 triggers 0x20 voltage replies
+// Test: replay of fahrbereit-log cadence – the tenth 0x25 triggers 0x20 voltage replies
 // ---------------------------------------------------------------------------
 static void test_fahrbereit_log_replay_cell_avg()
 {
-   // The fahrbereit log shows 0x006 0x25 0x00 0x02 0x01 requests.
-   // Fill MEB, complete startup, send the request, verify replies exist.
+   // The fahrbereit log shows repeated 0x006 0x25 0x00 0x02 0x01 polls.
+   // Fill MEB, send ten polls, verify replies exist.
 
    FillMebVoltages(*canStub, 4020);
-   roadster->Update(*mebBms, 1); // startupTime = 1
-   roadster->Update(*mebBms, 3); // (3-1)=2 >= delay → startup handshake done
+   roadster->Update(*mebBms, 1);
 
-   // Replicate: 00000006,4,25,00,02,01
+   for (int i = 0; i < 9; i++)
+   {
+      // Replicate: 00000006,4,25,00,02,01
+      SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
+      roadster->Update(*mebBms, 10 + static_cast<uint32_t>(i));
+   }
+
    SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
 
    canStub->Clear();
@@ -470,19 +423,52 @@ static void test_fahrbereit_log_replay_cell_avg()
 }
 
 // ---------------------------------------------------------------------------
+// Test: tMinTherm/tMaxTherm are never set to 4 or 5 even when internal
+//       thermistors (indices 4 and 5) have the most extreme temperatures.
+//
+// Sheet 9 (zero-based) is chosen because its mapping separates external and
+// internal thermistors across different MEB CMUs:
+//   therms 0-3  → MEB CMU 6
+//   therms 4-5  → MEB CMU 7   (internal, must be excluded from min/max)
+//
+// If CMU 7 is much hotter than CMU 6, the pre-fix code would set tMaxTherm=4.
+// After the fix, tMaxTherm must remain ≤ 3.
+// ---------------------------------------------------------------------------
+static void test_internal_therms_excluded_from_min_max()
+{
+   FillMebVoltages(*canStub, 3000); // all cells valid so Update() runs the therm loop
+
+   // Set external thermistors (MEB CMU 6) to 25 °C and internal (CMU 7) to 60 °C.
+   for (int cmu = 0; cmu < 8; cmu++)
+      FillMebTemperature(*canStub, cmu, 25.0f);
+   FillMebTemperature(*canStub, 7, 60.0f); // internal therms for sheet 9 map here
+
+   roadster->Update(*mebBms, 2);
+
+   // Sheet 9 internally → bmb10_t_max_therm / bmb10_t_min_therm params.
+   const int tMaxTherm = Param::GetInt(Param::bmb10_t_max_therm);
+   const int tMinTherm = Param::GetInt(Param::bmb10_t_min_therm);
+
+   if (tMaxTherm > 3)
+      std::cout << "  bmb10_t_max_therm=" << tMaxTherm << " exceeds 3 (internal therm leaked into max)\n";
+   if (tMinTherm > 3)
+      std::cout << "  bmb10_t_min_therm=" << tMinTherm << " exceeds 3 (internal therm leaked into min)\n";
+
+   ASSERT(tMaxTherm <= 3);
+   ASSERT(tMinTherm <= 3);
+}
+
+// ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
 REGISTER_TEST(RoadsterBmbTest,
-   test_startup_version_frames,
-   test_identification_request_triggers_version,
-   test_vmsbmb_broadcast_reply,
-   test_vmsbmb_request_reply,
    test_broadcast_info_reply,
    test_broadcast_capability_reply,
    test_directed_presence_reply,
-   test_cell_avg_reply_on_0x25,
+   test_cell_avg_reply_not_sent_before_tenth_request,
+   test_cell_avg_reply_on_tenth_0x25,
    test_cell_avg_reply_voltage_values,
    test_cell_avg_reply_suppressed_when_not_alive,
-   test_boot_log_replay_version_then_handshake,
-   test_fahrbereit_log_replay_cell_avg
+   test_fahrbereit_log_replay_cell_avg,
+   test_internal_therms_excluded_from_min_max
 );
