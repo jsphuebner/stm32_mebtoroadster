@@ -40,6 +40,10 @@ class RoadsterBmb : public CanCallback
       void Update(MebBms& mebBms, uint32_t time);
       void HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc) override;
       void HandleClear() override;
+      bool IsCellVoltageFilterActive() const { return activeFilterCell >= 0; }
+      int GetCellVoltageFilterCell() const { return activeFilterCell; }
+      uint32_t GetCellVoltageFilterSuppressedEvents() const { return suppressedEventCount; }
+      uint32_t GetCellVoltageFilterDuration(uint32_t time) const;
 
    private:
       CanHardware* canHardware;
@@ -66,10 +70,20 @@ class RoadsterBmb : public CanCallback
       // Per-sheet directed pending replies (0x0A-0x5A -> 0x30A-0x35A)
       SheetReply directedReplies[NumSheets];
 
+      float roadsterCellVoltages[MebBms::NumCells];
+      float lastPlausibleCellVoltages[MebBms::NumCells];
+      uint32_t implausibleSince[MebBms::NumCells];
+      bool implausibleActive[MebBms::NumCells];
+      int activeFilterCell;
+      uint32_t suppressedEventCount;
+
       void ClearSheet(const SheetParams& params, int alarmReason);
+      void ResetCellFilter();
+      void RefreshRoadsterCellVoltages(MebBms& mebBms, uint32_t time);
+      static bool CellVoltageIsPlausible(float rawVoltage, float lastPlausibleVoltage, float peerAverageVoltage);
       void InitCanMap();
       void SendBroadcastReplies();
-      void SendBroadcastCellAvgReplies(MebBms& mebBms, int startSheet, int numSheets);
+      void SendBroadcastCellAvgReplies(int startSheet, int numSheets);
       void SendDirectedReplies();
       CanMap& MapForSheet(int sheet) { return *canMaps[(sheet * NumCanMaps) / NumSheets]; }
       static void FillFirmwareReply(uint8_t subLo, uint8_t subHi, uint8_t* buf);

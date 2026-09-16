@@ -49,10 +49,11 @@ static Stm32Scheduler* scheduler;
 static Stm32Can* bmsCan;
 static Stm32Can* bmbCan;
 static CanMap* canMap;
-static RoadsterBmb* roadsterBmb;
 static IsaShunt* isa;
 MebBms* mebBms;
 static float cdmSoc;
+
+void SetRoadsterBmbForTerminal(RoadsterBmb* bmb);
 
 static void CalculateCdmSoc(void)
 {
@@ -189,7 +190,7 @@ int main(void)
    canMap = &cm;
    mebBms = &meb;
    isa = &i;
-   roadsterBmb = &roadster;
+   SetRoadsterBmbForTerminal(&roadster);
    mebBms->SetMaximumAmpHours(Param::GetFloat(Param::ahmax));
    mebBms->SetControllerGains(Param::GetInt(Param::chargekp), Param::GetInt(Param::chargeki));
 
