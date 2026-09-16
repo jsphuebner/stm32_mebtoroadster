@@ -44,7 +44,7 @@ static void PrintSerial(Terminal* term, char *arg);
 static void PrintErrors(Terminal* term, char *arg);
 
 extern MebBms* mebBms;
-static RoadsterBmb* roadsterBmb;
+static RoadsterBmb* roadsterBmb = nullptr;
 
 void SetRoadsterBmbForTerminal(RoadsterBmb* bmb)
 {
