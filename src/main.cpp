@@ -93,6 +93,7 @@ static void CalculateCdmSoc(void)
 //sample 100ms task
 static void Ms100Task(void)
 {
+   static int balanceCell = 0;
    //The following call toggles the LED output, so every 100ms
    //The LED changes from on to off and back.
    //Other calls:
@@ -109,6 +110,7 @@ static void Ms100Task(void)
    Param::SetFloat(Param::cpuload, cpuLoad / 10);
    isa->InitializeAndStartIfNeeded();
    CalculateCdmSoc();
+   mebBms->Balance(Param::GetBool(Param::balance), balanceCell);
 
    canMap->SendAll();
 
@@ -128,12 +130,6 @@ void Param::Change(Param::PARAM_NUM paramNum)
 {
    switch (paramNum)
    {
-   case Param::canspeed:
-      if (nullptr != bmsCan)
-         bmsCan->SetBaudrate((CanHardware::baudrates)Param::GetInt(Param::canspeed));
-      if (nullptr != bmbCan)
-         bmbCan->SetBaudrate((CanHardware::baudrates)Param::GetInt(Param::canspeed));
-      break;
    case Param::ahmax:
       if (nullptr != mebBms)
          mebBms->SetMaximumAmpHours(Param::GetFloat(Param::ahmax));

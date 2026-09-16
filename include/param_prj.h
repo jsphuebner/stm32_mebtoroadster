@@ -39,20 +39,19 @@
  */
 
  //Define a version string of your firmware here
-#define VER 1.02.R
+#define VER 1.03.R
 
 /* Entries must be ordered as follows:
    1. Saveable parameters (id != 0)
    2. Temporary parameters (id = 0)
    3. Display values
  */
-//Next param id (increase when adding new parameter!): 9
+//Next param id (increase when adding new parameter!): 10
 //Next value Id: 2389
 /*              category     name         unit       min     max     default id */
 #define PARAM_LIST \
-    PARAM_ENTRY(CAT_COMM,    canspeed,    CANSPEEDS, 0,      4,      2,      1   ) \
-    PARAM_ENTRY(CAT_COMM,    canperiod,   CANPERIODS,0,      1,      0,      2   ) \
     PARAM_ENTRY(CAT_COMM,    cdmcurlim,   "A",       0,      255,    255,    3   ) \
+    PARAM_ENTRY(CAT_BMS,     balance,     ONOFF,     0,      1,      0,      9   ) \
     PARAM_ENTRY(CAT_BMS,     cellmin,     "mV",      2500,   3600,   3380,   4   ) \
     PARAM_ENTRY(CAT_BMS,     cellmax,     "mV",      4000,   4300,   4200,   5   ) \
     PARAM_ENTRY(CAT_BMS,     ahmax,       "Ah",      10,     200,    148,    6   ) \
