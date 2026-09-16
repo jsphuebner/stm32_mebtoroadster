@@ -44,7 +44,12 @@ static void PrintSerial(Terminal* term, char *arg);
 static void PrintErrors(Terminal* term, char *arg);
 
 extern MebBms* mebBms;
-extern RoadsterBmb* roadsterBmb;
+static RoadsterBmb* roadsterBmb;
+
+void SetRoadsterBmbForTerminal(RoadsterBmb* bmb)
+{
+   roadsterBmb = bmb;
+}
 
 extern "C" const TERM_CMD termCmds[] =
 {

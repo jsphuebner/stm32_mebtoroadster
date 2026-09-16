@@ -336,7 +336,12 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
    if (alive)
       RefreshRoadsterCellVoltages(mebBms, time);
    else
+   {
       activeFilterCell = -1;
+
+      for (int cell = 0; cell < MebBms::NumCells; cell++)
+         roadsterCellVoltages[cell] = 0;
+   }
 
    for (int sheet = 0; sheet < NumSheets; sheet++)
    {
