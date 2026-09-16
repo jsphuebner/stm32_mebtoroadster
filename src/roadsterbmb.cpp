@@ -322,6 +322,9 @@ void RoadsterBmb::RefreshRoadsterCellVoltages(MebBms& mebBms, uint32_t time)
       else
       {
          roadsterCellVoltages[cell] = rawVoltage;
+         lastPlausibleCellVoltages[cell] = rawVoltage;
+         implausibleActive[cell] = false;
+         implausibleSince[cell] = 0;
       }
    }
 }
