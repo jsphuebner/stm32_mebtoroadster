@@ -49,7 +49,7 @@ static Stm32Scheduler* scheduler;
 static Stm32Can* bmsCan;
 static Stm32Can* bmbCan;
 static CanMap* canMap;
-static RoadsterBmb* roadsterBmb;
+RoadsterBmb* roadsterBmb;
 static IsaShunt* isa;
 MebBms* mebBms;
 static float cdmSoc;

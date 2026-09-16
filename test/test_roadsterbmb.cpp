@@ -91,6 +91,44 @@ static void FillMebVoltages(MultiCanStub& stub, uint32_t targetMv)
    }
 }
 
+static void SendMebGroupVoltages(MultiCanStub& stub, int group, uint32_t cell0Mv, uint32_t cell1Mv, uint32_t cell2Mv, uint32_t cell3Mv)
+{
+   const uint32_t v0 = cell0Mv - 1000u;
+   const uint32_t v1 = cell1Mv - 1000u;
+   const uint32_t v2 = cell2Mv - 1000u;
+   const uint32_t v3 = cell3Mv - 1000u;
+   const uint32_t canId = 0x1C0u + static_cast<uint32_t>(group + group / 3);
+
+   gData[0] = (v0 << 12) | ((v1 & 0xFFu) << 24);
+   gData[1] = ((v1 >> 8) & 0xFu) | (v2 << 4) | (v3 << 16);
+   stub.HandleRx(canId, gData, 8);
+}
+
+static void SetMebCellVoltage(MultiCanStub& stub, int cell, uint32_t targetMv, uint32_t otherCellsMv)
+{
+   const int group = cell / 4;
+   const int localCell = cell % 4;
+   uint32_t voltages[4] = { otherCellsMv, otherCellsMv, otherCellsMv, otherCellsMv };
+   voltages[localCell] = targetMv;
+   SendMebGroupVoltages(stub, group, voltages[0], voltages[1], voltages[2], voltages[3]);
+}
+
+static int RawRoadsterVoltage(float cellVoltageMv)
+{
+   return static_cast<int>(cellVoltageMv * 8.192f + 0.5f);
+}
+
+static const MultiCanStub::Frame* FindCellAvgFrame(const MultiCanStub& stub, uint32_t canId, uint8_t msgIdx)
+{
+   for (const auto& f : stub.sentFrames)
+   {
+     if (f.canId == canId && f.data[0] == 0x20 && f.data[1] == msgIdx)
+        return &f;
+   }
+
+   return nullptr;
+}
+
 // ---------------------------------------------------------------------------
 // Inject a MEB module temperature so RoadsterBmb::Update() sees it.
 //
@@ -366,6 +404,99 @@ static void test_cell_avg_reply_voltage_values()
 }
 
 // ---------------------------------------------------------------------------
+// Test: transient implausible single-cell spikes are held away from Roadster
+// summary params and released again once the cell returns plausible.
+// ---------------------------------------------------------------------------
+static void test_transient_implausible_voltage_is_suppressed_for_summary_params()
+{
+   FillMebVoltages(*canStub, 4050);
+   roadster->Update(*mebBms, 10);
+
+   SetMebCellVoltage(*canStub, 0, 3650, 4050);
+   roadster->Update(*mebBms, 11);
+
+   const int heldVoltage = Param::GetInt(Param::bmb1_v_min);
+   if (heldVoltage != RawRoadsterVoltage(4050))
+     std::cout << "  Expected held summary voltage 0x" << std::hex << RawRoadsterVoltage(4050)
+               << " got 0x" << heldVoltage << "\n";
+
+   ASSERT(heldVoltage == RawRoadsterVoltage(4050));
+   ASSERT(roadster->IsCellVoltageFilterActive());
+   ASSERT(roadster->GetCellVoltageFilterCell() == 0);
+   ASSERT(roadster->GetCellVoltageFilterDuration(11) == 0);
+   ASSERT(roadster->GetCellVoltageFilterSuppressedEvents() >= 1);
+
+   SetMebCellVoltage(*canStub, 0, 4100, 4050);
+   roadster->Update(*mebBms, 12);
+
+   const int recoveredVoltage = Param::GetInt(Param::bmb1_v_min);
+   const int rawRecoveredVoltage = RawRoadsterVoltage(mebBms->GetCellVoltage(0));
+   if (recoveredVoltage != rawRecoveredVoltage)
+     std::cout << "  Expected recovered summary voltage 0x" << std::hex << rawRecoveredVoltage
+               << " got 0x" << recoveredVoltage << "\n";
+
+   ASSERT(recoveredVoltage == rawRecoveredVoltage);
+   ASSERT(!roadster->IsCellVoltageFilterActive());
+}
+
+// ---------------------------------------------------------------------------
+// Test: transient implausible single-cell spikes are also hidden from 0x20
+// cell-average replies while the debounce timer is active.
+// ---------------------------------------------------------------------------
+static void test_transient_implausible_voltage_is_suppressed_for_cell_avg_frames()
+{
+   FillMebVoltages(*canStub, 4050);
+   roadster->Update(*mebBms, 10);
+
+   SetMebCellVoltage(*canStub, 0, 3650, 4050);
+   roadster->Update(*mebBms, 11);
+
+   for (int i = 0; i < 10; i++)
+     SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
+
+   canStub->Clear();
+   roadster->Update(*mebBms, 12);
+
+   const MultiCanStub::Frame* frame = FindCellAvgFrame(*canStub, CellAvgReplyBaseId, 0);
+   ASSERT(frame != nullptr);
+
+   if (frame)
+   {
+     const uint16_t raw = static_cast<uint16_t>(frame->data[2]) |
+                          (static_cast<uint16_t>(frame->data[3]) << 8);
+     if (raw != RawRoadsterVoltage(4050))
+        std::cout << "  Expected held 0x20 voltage 0x" << std::hex << RawRoadsterVoltage(4050)
+                  << " got 0x" << raw << "\n";
+     ASSERT(raw == RawRoadsterVoltage(4050));
+   }
+}
+
+// ---------------------------------------------------------------------------
+// Test: a continuously implausible cell is only hidden for 30 s and then
+// forwarded to the Roadster again.
+// ---------------------------------------------------------------------------
+static void test_persistent_implausible_voltage_reaches_roadster_after_30_seconds()
+{
+   FillMebVoltages(*canStub, 4050);
+   roadster->Update(*mebBms, 10);
+
+   SetMebCellVoltage(*canStub, 0, 3650, 4050);
+   roadster->Update(*mebBms, 11);
+
+   roadster->Update(*mebBms, 42);
+
+   const int forwardedVoltage = Param::GetInt(Param::bmb1_v_min);
+   const int rawVoltage = RawRoadsterVoltage(mebBms->GetCellVoltage(0));
+   if (forwardedVoltage != rawVoltage)
+     std::cout << "  Expected persistent fault voltage 0x" << std::hex << rawVoltage
+               << " got 0x" << forwardedVoltage << "\n";
+
+   ASSERT(forwardedVoltage == rawVoltage);
+   ASSERT(!roadster->IsCellVoltageFilterActive());
+   ASSERT(roadster->GetCellVoltageFilterSuppressedEvents() >= 1);
+}
+
+// ---------------------------------------------------------------------------
 // Test: 0x25 reply is suppressed when MebBms is not alive (time too large)
 // ---------------------------------------------------------------------------
 static void test_cell_avg_reply_suppressed_when_not_alive()
@@ -468,6 +599,9 @@ REGISTER_TEST(RoadsterBmbTest,
    test_cell_avg_reply_not_sent_before_tenth_request,
    test_cell_avg_reply_on_tenth_0x25,
    test_cell_avg_reply_voltage_values,
+   test_transient_implausible_voltage_is_suppressed_for_summary_params,
+   test_transient_implausible_voltage_is_suppressed_for_cell_avg_frames,
+   test_persistent_implausible_voltage_reaches_roadster_after_30_seconds,
    test_cell_avg_reply_suppressed_when_not_alive,
    test_fahrbereit_log_replay_cell_avg,
    test_internal_therms_excluded_from_min_max

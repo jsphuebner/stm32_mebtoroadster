@@ -45,6 +45,9 @@ static const RoadsterBmb::SheetParams sheetParams[RoadsterBmb::NumSheets] =
 };
 static const int RoadsterBricksPerSheet = 9;
 static const int RoadsterThermistorsPerSheet = 6;
+static const float RoadsterCellJumpThresholdMv = 80.0f;
+static const float RoadsterPeerDeviationThresholdMv = 90.0f;
+static const uint32_t RoadsterCellSuppressionTime = 30;
 // Thermistors 4 and 5 are internal to the BMB; only thermistors 0-3 are
 // external sensors used for min/max reporting.
 static const int RoadsterExternalThermistorsPerSheet = 4;
@@ -127,7 +130,8 @@ RoadsterBmb::RoadsterBmb(CanHardware* txCan)
    : canHardware(txCan), map0(txCan, false), map1(txCan, false),
      broadcastEchoPending(false), broadcastEchoData{0, 0, 0},
      broadcastInfoPending(false), broadcastCapabilityPending(false), broadcastDisconnectPending(false),
-     broadcastCellAvgPending(0), cellAvgSheetOffset(0), canMapSendIdx(0)
+     broadcastCellAvgPending(0), cellAvgSheetOffset(0), canMapSendIdx(0),
+     activeFilterCell(-1), suppressedEventCount(0)
 {
    canMaps[0] = &map0;
    canMaps[1] = &map1;
@@ -142,6 +146,14 @@ RoadsterBmb::RoadsterBmb(CanHardware* txCan)
    }
 
    HandleClear();
+}
+
+uint32_t RoadsterBmb::GetCellVoltageFilterDuration(uint32_t time) const
+{
+   if (activeFilterCell < 0 || !implausibleActive[activeFilterCell] || time < implausibleSince[activeFilterCell])
+      return 0;
+
+   return time - implausibleSince[activeFilterCell];
 }
 
 void RoadsterBmb::HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc)
@@ -213,11 +225,115 @@ void RoadsterBmb::HandleClear()
 
    for (int i = 0; i < NumSheets; i++)
       canHardware->RegisterUserMessage(NodeBaseId + static_cast<uint32_t>(i) * NodeIdStride);
+
+   ResetCellFilter();
+}
+
+void RoadsterBmb::ResetCellFilter()
+{
+   activeFilterCell = -1;
+   suppressedEventCount = 0;
+
+   for (int i = 0; i < MebBms::NumCells; i++)
+   {
+      roadsterCellVoltages[i] = 0;
+      lastPlausibleCellVoltages[i] = 0;
+      implausibleSince[i] = 0;
+      implausibleActive[i] = false;
+   }
+}
+
+bool RoadsterBmb::CellVoltageIsPlausible(float rawVoltage, float lastPlausibleVoltage, float peerAverageVoltage)
+{
+   if (rawVoltage < 1000)
+      return false;
+
+   if (lastPlausibleVoltage < 1000)
+      return true;
+
+   const bool suddenJump = std::fabs(rawVoltage - lastPlausibleVoltage) > RoadsterCellJumpThresholdMv;
+   const bool peerDeviation = std::fabs(rawVoltage - peerAverageVoltage) > RoadsterPeerDeviationThresholdMv;
+
+   return !(suddenJump && peerDeviation);
+}
+
+void RoadsterBmb::RefreshRoadsterCellVoltages(MebBms& mebBms, uint32_t time)
+{
+   float validSum = 0;
+   int validCount = 0;
+   float rawCellVoltages[MebBms::NumCells];
+
+   activeFilterCell = -1;
+
+   for (int cell = 0; cell < MebBms::NumCells; cell++)
+   {
+      const float rawVoltage = mebBms.GetCellVoltage(cell);
+      rawCellVoltages[cell] = rawVoltage;
+
+      if (rawVoltage >= 1000)
+      {
+         validSum += rawVoltage;
+         validCount++;
+      }
+   }
+
+   for (int cell = 0; cell < MebBms::NumCells; cell++)
+   {
+      const float rawVoltage = rawCellVoltages[cell];
+
+      if (rawVoltage < 1000)
+      {
+         roadsterCellVoltages[cell] = rawVoltage;
+         lastPlausibleCellVoltages[cell] = 0;
+         implausibleActive[cell] = false;
+         implausibleSince[cell] = 0;
+         continue;
+      }
+
+      float peerAverage = rawVoltage;
+
+      if (validCount > 1)
+         peerAverage = (validSum - rawVoltage) / (validCount - 1);
+
+      if (CellVoltageIsPlausible(rawVoltage, lastPlausibleCellVoltages[cell], peerAverage))
+      {
+         roadsterCellVoltages[cell] = rawVoltage;
+         lastPlausibleCellVoltages[cell] = rawVoltage;
+         implausibleActive[cell] = false;
+         implausibleSince[cell] = 0;
+         continue;
+      }
+
+      if (!implausibleActive[cell] || time < implausibleSince[cell])
+      {
+         implausibleActive[cell] = true;
+         implausibleSince[cell] = time;
+         suppressedEventCount++;
+      }
+
+      const uint32_t elapsed = time - implausibleSince[cell];
+
+      if (elapsed < RoadsterCellSuppressionTime)
+      {
+         roadsterCellVoltages[cell] = lastPlausibleCellVoltages[cell];
+         if (activeFilterCell < 0)
+            activeFilterCell = cell;
+      }
+      else
+      {
+         roadsterCellVoltages[cell] = rawVoltage;
+      }
+   }
 }
 
 void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
 {
    const bool alive = mebBms.Alive(time);
+
+   if (alive)
+      RefreshRoadsterCellVoltages(mebBms, time);
+   else
+      activeFilterCell = -1;
 
    for (int sheet = 0; sheet < NumSheets; sheet++)
    {
@@ -240,7 +356,7 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
       for (int brick = 0; brick < RoadsterBricksPerSheet; brick++)
       {
          const int mebCell = MappedCellIndex(sheet, brick);
-         const float cellVoltage = mebBms.GetCellVoltage(mebCell);
+         const float cellVoltage = roadsterCellVoltages[mebCell];
 
          // Treat values below 1 V as invalid/uninitialized cell measurements.
          if (cellVoltage < 1000)
@@ -364,7 +480,7 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
       {
          static const int CellAvgSheetsPerCycle = 3; // 3 msgs/sheet × 3 sheets = 9 frames, within half the 20-entry buffer
          const int sheetsThisCycle = MIN(CellAvgSheetsPerCycle, NumSheets - cellAvgSheetOffset);
-         SendBroadcastCellAvgReplies(mebBms, cellAvgSheetOffset, sheetsThisCycle);
+         SendBroadcastCellAvgReplies(cellAvgSheetOffset, sheetsThisCycle);
          cellAvgSheetOffset += sheetsThisCycle;
          if (cellAvgSheetOffset >= NumSheets)
          {
@@ -451,7 +567,7 @@ void RoadsterBmb::SendDirectedReplies()
    }
 }
 
-void RoadsterBmb::SendBroadcastCellAvgReplies(MebBms& mebBms, int startSheet, int numSheets)
+void RoadsterBmb::SendBroadcastCellAvgReplies(int startSheet, int numSheets)
 {
    // For each sheet, send 3 messages of 3 bricks each, covering all 9 bricks.
    // Format per message: [0x20, msgIdx, v0_lo, v0_hi, v1_lo, v1_hi, v2_lo, v2_hi]
@@ -480,7 +596,7 @@ void RoadsterBmb::SendBroadcastCellAvgReplies(MebBms& mebBms, int startSheet, in
          {
             const int brick = msgIdx * BricksPerMsg + i;
             const int mebCell = MappedCellIndex(sheet, brick);
-            const int rawV = RawVoltage(mebBms.GetCellVoltage(mebCell));
+            const int rawV = RawVoltage(roadsterCellVoltages[mebCell]);
             data[2 + i * 2]     = static_cast<uint8_t>(rawV & 0xFF);
             data[2 + i * 2 + 1] = static_cast<uint8_t>((rawV >> 8) & 0xFF);
          }

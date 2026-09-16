@@ -23,6 +23,7 @@
  */
 #include <libopencm3/cm3/common.h>
 #include <libopencm3/stm32/memorymap.h>
+#include <libopencm3/stm32/rtc.h>
 #include "hwdefs.h"
 #include "terminal.h"
 #include "params.h"
@@ -32,15 +33,18 @@
 #include "param_save.h"
 #include "errormessage.h"
 #include "mebbms.h"
+#include "roadsterbmb.h"
 #include "terminalcommands.h"
 
 static void PrintVoltages(Terminal* term, char *arg);
+static void PrintRoadsterFilter(Terminal* term, char *arg);
 static void LoadDefaults(Terminal* term, char *arg);
 static void Help(Terminal* term, char *arg);
 static void PrintSerial(Terminal* term, char *arg);
 static void PrintErrors(Terminal* term, char *arg);
 
 extern MebBms* mebBms;
+extern RoadsterBmb* roadsterBmb;
 
 extern "C" const TERM_CMD termCmds[] =
 {
@@ -54,6 +58,7 @@ extern "C" const TERM_CMD termCmds[] =
   { "load", TerminalCommands::LoadParameters },
   { "reset", TerminalCommands::Reset },
   { "voltages", PrintVoltages },
+  { "roadsterfilter", PrintRoadsterFilter },
   { "defaults", LoadDefaults },
   { "help", Help },
   { "serial", PrintSerial },
@@ -82,6 +87,25 @@ static void LoadDefaults(Terminal* term, char *arg)
    arg = arg;
    Param::LoadDefaults();
    fprintf(term, "Defaults loaded\r\n");
+}
+
+static void PrintRoadsterFilter(Terminal* term, char *arg)
+{
+   (void)arg;
+
+   if (nullptr == roadsterBmb)
+   {
+      fprintf(term, "Roadster BMB not initialized\r\n");
+      return;
+   }
+
+   const uint32_t now = rtc_get_counter_val();
+   fprintf(term,
+           "active=%d cell=%d duration_s=%u suppressed_events=%u\r\n",
+           roadsterBmb->IsCellVoltageFilterActive() ? 1 : 0,
+           roadsterBmb->GetCellVoltageFilterCell(),
+           roadsterBmb->GetCellVoltageFilterDuration(now),
+           roadsterBmb->GetCellVoltageFilterSuppressedEvents());
 }
 
 static void PrintErrors(Terminal* term, char *arg)
