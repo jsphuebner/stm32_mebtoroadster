@@ -92,18 +92,22 @@ static float EstimateRoadsterVoltage(float soc)
    return roadsterVoltageToSoc[RoadsterCurveTableItems - 1].voltageMv;
 }
 
+static int EncodedRawVoltage(float cellVoltageMv)
+{
+   return static_cast<int>(std::round(cellVoltageMv * RoadsterRawVoltageScale));
+}
+
 static int ReportedRawVoltage(float cellVoltageMv)
 {
    if (cellVoltageMv < MebBms::SocCurveMinVoltage)
-      return static_cast<int>(std::round(cellVoltageMv * RoadsterRawVoltageScale));
+      return EncodedRawVoltage(cellVoltageMv);
 
    const float roadsterVoltageMv = EstimateRoadsterVoltage(MebBms::LookupSocFromVoltage(cellVoltageMv));
-   const float roadsterRawVoltage = roadsterVoltageMv * RoadsterRawVoltageScale;
 
    // Bias slightly low so the Roadster sees at most the intended SoC while
    // still preserving exact raw-voltage step values when the remapped voltage
    // lands exactly on a Roadster ADC count.
-   return static_cast<int>(std::round(roadsterRawVoltage - RoadsterRawVoltageBias));
+   return EncodedRawVoltage(roadsterVoltageMv - (RoadsterRawVoltageBias / RoadsterRawVoltageScale));
 }
 
 static int MappedCellIndex(int sheet, int brick)
@@ -623,7 +627,7 @@ int RoadsterBmb::RoundToInt(float value)
 
 int RoadsterBmb::RawVoltage(float cellVoltageMv)
 {
-   return RoundToInt(cellVoltageMv * RoadsterRawVoltageScale);
+   return EncodedRawVoltage(cellVoltageMv);
 }
 
 int RoadsterBmb::RawTemperature(float temperatureDegC)
