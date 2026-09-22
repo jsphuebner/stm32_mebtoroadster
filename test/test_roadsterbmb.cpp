@@ -312,14 +312,17 @@ static void test_cell_avg_reply_on_tenth_0x25()
 }
 
 // ---------------------------------------------------------------------------
-// Test: 0x25 reply voltage values are correct
+// Test: 0x25 reply voltage values are spoofed onto the Roadster curve
 //
-// For 3000 mV:  RawVoltage = round(3000 * 8.192) = 24576 = 0x6000
-//               little-endian bytes: 0x00, 0x60
+// For 3680 mV on the MEB curve: SoC ≈ 49.76 %, which maps to ≈ 3814.28 mV on
+// the Roadster curve. The implementation floors the final raw value, yielding
+// floor(3814.28 * 8.192) = 31246 = 0x7A0E.
 // ---------------------------------------------------------------------------
 static void test_cell_avg_reply_voltage_values()
 {
-   FillMebVoltages(*canStub, 3000);
+   static const uint16_t expectedRaw = 0x7A0E;
+
+   FillMebVoltages(*canStub, 3680);
    roadster->Update(*mebBms, 2);
 
    for (int i = 0; i < 9; i++)
@@ -344,16 +347,16 @@ static void test_cell_avg_reply_voltage_values()
       if (f.canId == replyId && f.data[0] == 0x20 && f.data[1] == 0)
       {
          found = true;
-         // bytes 2-7: three 16-bit LE voltages, all should be 0x6000
+         // bytes 2-7: three 16-bit LE voltages, all should match the spoofed value
          for (int i = 0; i < 3; i++)
          {
             uint16_t raw = static_cast<uint16_t>(f.data[2 + i * 2]) |
                            (static_cast<uint16_t>(f.data[3 + i * 2]) << 8);
-            if (raw != 0x6000)
+            if (raw != expectedRaw)
             {
                std::cout << "  Voltage mismatch at cell " << i
                          << " in msg 0: got 0x" << std::hex << raw
-                         << " expected 0x6000\n";
+                         << " expected 0x" << expectedRaw << "\n";
                voltageOk = false;
             }
          }
@@ -363,6 +366,43 @@ static void test_cell_avg_reply_voltage_values()
 
    ASSERT(found);
    ASSERT(voltageOk);
+}
+
+// ---------------------------------------------------------------------------
+// Test: sheet voltage parameters are spoofed onto the Roadster curve
+// ---------------------------------------------------------------------------
+static void test_sheet_voltage_params_use_spoofed_curve()
+{
+   static const int expectedRaw = 0x7A0E;
+
+   FillMebVoltages(*canStub, 3680);
+   roadster->Update(*mebBms, 2);
+
+   const int balMinV = Param::GetInt(Param::bmb1_bal_min_v);
+   const int balMaxV = Param::GetInt(Param::bmb1_bal_max_v);
+   const int vMin = Param::GetInt(Param::bmb1_v_min);
+   const int vMax = Param::GetInt(Param::bmb1_v_max);
+   const int vSumAvg = Param::GetInt(Param::bmb1_v_sum_avg);
+
+   if (balMinV != expectedRaw || balMaxV != expectedRaw || vMin != expectedRaw || vMax != expectedRaw)
+   {
+      std::cout << "  Unexpected spoofed sheet voltages:"
+               << " balMinV=0x" << std::hex << balMinV
+               << " balMaxV=0x" << balMaxV
+               << " vMin=0x" << vMin
+               << " vMax=0x" << vMax << "\n";
+   }
+   if (vSumAvg != expectedRaw * 9)
+   {
+      std::cout << "  Unexpected spoofed sheet sum: got 0x" << std::hex << vSumAvg
+               << " expected 0x" << (expectedRaw * 9) << "\n";
+   }
+
+   ASSERT(balMinV == expectedRaw);
+   ASSERT(balMaxV == expectedRaw);
+   ASSERT(vMin == expectedRaw);
+   ASSERT(vMax == expectedRaw);
+   ASSERT(vSumAvg == expectedRaw * 9);
 }
 
 // ---------------------------------------------------------------------------
@@ -468,6 +508,7 @@ REGISTER_TEST(RoadsterBmbTest,
    test_cell_avg_reply_not_sent_before_tenth_request,
    test_cell_avg_reply_on_tenth_0x25,
    test_cell_avg_reply_voltage_values,
+   test_sheet_voltage_params_use_spoofed_curve,
    test_cell_avg_reply_suppressed_when_not_alive,
    test_fahrbereit_log_replay_cell_avg,
    test_internal_therms_excluded_from_min_max

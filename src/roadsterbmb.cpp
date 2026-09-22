@@ -48,9 +48,80 @@ static const int RoadsterThermistorsPerSheet = 6;
 // Thermistors 4 and 5 are internal to the BMB; only thermistors 0-3 are
 // external sensors used for min/max reporting.
 static const int RoadsterExternalThermistorsPerSheet = 4;
+static const float RoadsterRawVoltageScale = 8.192f;
 static const int TotalRoadsterBricks = RoadsterBmb::NumSheets * RoadsterBricksPerSheet;
 static const int MebThermistors = MebBms::NumCells / 12;
 static const int TotalRoadsterThermistors = RoadsterBmb::NumSheets * RoadsterThermistorsPerSheet;
+static const uint16_t mebVoltageToSoc[] =
+{
+   /*2.85V  2.90  2.95  3.00  3.05 3.10  3.15  3.20  3.25  3.30  3.35  3.40  3.45  3.50  3.55  3.60  3.65  3.70  3.75  3.80  3.85  3.90  3.95  4.00  4.05  4.10  4.15  4.20  */
+   0,     12,   31,   55,   80,   116,  153,  202,  239,  325,  496,  701,  1231, 1794, 2307, 3368, 4388, 5368, 5949, 6326, 6742, 7232, 7708, 8104, 8575, 8996, 9446, 10000
+};
+static const int MebCurveMinVoltageMv = 2850;
+static const int MebCurveMaxVoltageMv = 4200;
+static const int MebCurveGranularityMv = 50;
+static const int MebCurveTableItems = sizeof(mebVoltageToSoc) / sizeof(mebVoltageToSoc[0]);
+
+struct RoadsterVoltageSocPoint
+{
+   int voltageMv;
+   int soc;
+};
+
+static const RoadsterVoltageSocPoint roadsterVoltageToSoc[] =
+{
+   { 3000, 0 },
+   { 3680, 1000 },
+   { 3700, 1500 },
+   { 3760, 2500 },
+   { 3785, 4000 },
+   { 3815, 5000 },
+   { 4200, 10000 }
+};
+static const int RoadsterCurveTableItems = sizeof(roadsterVoltageToSoc) / sizeof(roadsterVoltageToSoc[0]);
+
+static float EstimateMebSoc(float cellVoltageMv)
+{
+   const float clampedVoltage = MIN(static_cast<float>(MebCurveMaxVoltageMv), cellVoltageMv);
+   const float lookupVoltage = MAX(static_cast<float>(MebCurveGranularityMv), clampedVoltage - MebCurveMinVoltageMv);
+   const int socIndex = static_cast<int>(lookupVoltage) / MebCurveGranularityMv;
+
+   if (socIndex >= (MebCurveTableItems - 1))
+      return mebVoltageToSoc[MebCurveTableItems - 1];
+
+   const float socFraction = (lookupVoltage - (socIndex * MebCurveGranularityMv)) / static_cast<float>(MebCurveGranularityMv);
+   const float diff = mebVoltageToSoc[socIndex + 1] - mebVoltageToSoc[socIndex];
+   return mebVoltageToSoc[socIndex] + diff * socFraction;
+}
+
+static float EstimateRoadsterVoltage(float soc)
+{
+   if (soc <= roadsterVoltageToSoc[0].soc)
+      return roadsterVoltageToSoc[0].voltageMv;
+
+   for (int i = 0; i < (RoadsterCurveTableItems - 1); i++)
+   {
+      const RoadsterVoltageSocPoint& start = roadsterVoltageToSoc[i];
+      const RoadsterVoltageSocPoint& end = roadsterVoltageToSoc[i + 1];
+
+      if (soc <= end.soc)
+      {
+         const float socFraction = (soc - start.soc) / static_cast<float>(end.soc - start.soc);
+         return start.voltageMv + (end.voltageMv - start.voltageMv) * socFraction;
+      }
+   }
+
+   return roadsterVoltageToSoc[RoadsterCurveTableItems - 1].voltageMv;
+}
+
+static int ReportedRawVoltage(float cellVoltageMv)
+{
+   const float roadsterVoltageMv = EstimateRoadsterVoltage(EstimateMebSoc(cellVoltageMv));
+
+   // Bias slightly low so the Roadster sees at most the intended SoC while
+   // keeping the reported voltage close to the physical pack voltage.
+   return static_cast<int>(std::floor(roadsterVoltageMv * RoadsterRawVoltageScale));
+}
 
 static int MappedCellIndex(int sheet, int brick)
 {
@@ -246,7 +317,7 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
          if (cellVoltage < 1000)
             continue;
 
-         const int rawVoltage = RawVoltage(cellVoltage);
+         const int rawVoltage = ReportedRawVoltage(cellVoltage);
          sumRaw += rawVoltage;
          validCount++;
 
@@ -480,7 +551,7 @@ void RoadsterBmb::SendBroadcastCellAvgReplies(MebBms& mebBms, int startSheet, in
          {
             const int brick = msgIdx * BricksPerMsg + i;
             const int mebCell = MappedCellIndex(sheet, brick);
-            const int rawV = RawVoltage(mebBms.GetCellVoltage(mebCell));
+            const int rawV = ReportedRawVoltage(mebBms.GetCellVoltage(mebCell));
             data[2 + i * 2]     = static_cast<uint8_t>(rawV & 0xFF);
             data[2 + i * 2 + 1] = static_cast<uint8_t>((rawV >> 8) & 0xFF);
          }
@@ -569,7 +640,7 @@ int RoadsterBmb::RoundToInt(float value)
 
 int RoadsterBmb::RawVoltage(float cellVoltageMv)
 {
-   return RoundToInt(cellVoltageMv * 8.192f);
+   return RoundToInt(cellVoltageMv * RoadsterRawVoltageScale);
 }
 
 int RoadsterBmb::RawTemperature(float temperatureDegC)
