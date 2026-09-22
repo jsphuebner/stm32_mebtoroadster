@@ -51,6 +51,7 @@ static Stm32Can* bmbCan;
 static CanMap* canMap;
 static IsaShunt* isa;
 MebBms* mebBms;
+static RoadsterBmb* roadsterBmb;
 static float cdmSoc;
 
 void SetRoadsterBmbForTerminal(RoadsterBmb* bmb);
@@ -190,6 +191,7 @@ int main(void)
    canMap = &cm;
    mebBms = &meb;
    isa = &i;
+   roadsterBmb = &roadster;
    SetRoadsterBmbForTerminal(&roadster);
    mebBms->SetMaximumAmpHours(Param::GetFloat(Param::ahmax));
    mebBms->SetControllerGains(Param::GetInt(Param::chargekp), Param::GetInt(Param::chargeki));
