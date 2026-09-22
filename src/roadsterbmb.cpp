@@ -214,6 +214,9 @@ RoadsterBmb::RoadsterBmb(CanHardware* txCan)
       for (int j = 0; j < 8; j++) directedReplies[i].data[j] = 0;
    }
 
+   for (int i = 0; i < MebBms::NumCells; i++)
+      reportedRawVoltages[i] = 0;
+
    HandleClear();
 }
 
@@ -292,6 +295,9 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
 {
    const bool alive = mebBms.Alive(time);
 
+   if (alive)
+      UpdateReportedRawVoltages(mebBms);
+
    for (int sheet = 0; sheet < NumSheets; sheet++)
    {
       const SheetParams& params = sheetParams[sheet];
@@ -319,7 +325,7 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
          if (cellVoltage < 1000)
             continue;
 
-         const int rawVoltage = ReportedRawVoltage(cellVoltage);
+         const int rawVoltage = reportedRawVoltages[mebCell];
          sumRaw += rawVoltage;
          validCount++;
 
@@ -437,7 +443,7 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
       {
          static const int CellAvgSheetsPerCycle = 3; // 3 msgs/sheet × 3 sheets = 9 frames, within half the 20-entry buffer
          const int sheetsThisCycle = MIN(CellAvgSheetsPerCycle, NumSheets - cellAvgSheetOffset);
-         SendBroadcastCellAvgReplies(mebBms, cellAvgSheetOffset, sheetsThisCycle);
+         SendBroadcastCellAvgReplies(cellAvgSheetOffset, sheetsThisCycle);
          cellAvgSheetOffset += sheetsThisCycle;
          if (cellAvgSheetOffset >= NumSheets)
          {
@@ -524,7 +530,7 @@ void RoadsterBmb::SendDirectedReplies()
    }
 }
 
-void RoadsterBmb::SendBroadcastCellAvgReplies(MebBms& mebBms, int startSheet, int numSheets)
+void RoadsterBmb::SendBroadcastCellAvgReplies(int startSheet, int numSheets)
 {
    // For each sheet, send 3 messages of 3 bricks each, covering all 9 bricks.
    // Format per message: [0x20, msgIdx, v0_lo, v0_hi, v1_lo, v1_hi, v2_lo, v2_hi]
@@ -553,7 +559,7 @@ void RoadsterBmb::SendBroadcastCellAvgReplies(MebBms& mebBms, int startSheet, in
          {
             const int brick = msgIdx * BricksPerMsg + i;
             const int mebCell = MappedCellIndex(sheet, brick);
-            const int rawV = ReportedRawVoltage(mebBms.GetCellVoltage(mebCell));
+            const int rawV = reportedRawVoltages[mebCell];
             data[2 + i * 2]     = static_cast<uint8_t>(rawV & 0xFF);
             data[2 + i * 2 + 1] = static_cast<uint8_t>((rawV >> 8) & 0xFF);
          }
@@ -561,6 +567,12 @@ void RoadsterBmb::SendBroadcastCellAvgReplies(MebBms& mebBms, int startSheet, in
          canHardware->Send(replyId, data, 8);
       }
    }
+}
+
+void RoadsterBmb::UpdateReportedRawVoltages(MebBms& mebBms)
+{
+   for (int cell = 0; cell < MebBms::NumCells; cell++)
+      reportedRawVoltages[cell] = ReportedRawVoltage(mebBms.GetCellVoltage(cell));
 }
 
 void RoadsterBmb::FillFirmwareReply(uint8_t subLo, uint8_t subHi, uint8_t* buf)
