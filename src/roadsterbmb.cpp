@@ -117,6 +117,9 @@ static float EstimateRoadsterVoltage(float soc)
 
 static int ReportedRawVoltage(float cellVoltageMv)
 {
+   if (cellVoltageMv <= MebCurveMinVoltageMv)
+      return static_cast<int>(std::round(cellVoltageMv * RoadsterRawVoltageScale));
+
    const float roadsterVoltageMv = EstimateRoadsterVoltage(EstimateMebSoc(cellVoltageMv));
 
    // Bias slightly low so the Roadster sees at most the intended SoC while

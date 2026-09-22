@@ -406,6 +406,42 @@ static void test_sheet_voltage_params_use_spoofed_curve()
 }
 
 // ---------------------------------------------------------------------------
+// Test: voltages below the MEB curve minimum are not inflated to the Roadster
+//       0 % point
+// ---------------------------------------------------------------------------
+static void test_low_voltage_below_meb_curve_is_not_inflated()
+{
+   static const uint16_t expectedRaw = 0x599A; // round(2800 * 8.192)
+
+   FillMebVoltages(*canStub, 2800);
+   roadster->Update(*mebBms, 2);
+
+   for (int i = 0; i < 9; i++)
+   {
+      SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
+      roadster->Update(*mebBms, 10 + static_cast<uint32_t>(i));
+   }
+
+   SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
+
+   canStub->Clear();
+   roadster->Update(*mebBms, 50);
+
+   const MultiCanStub::Frame* f = canStub->FindFrame(CellAvgReplyBaseId, 0x20);
+   ASSERT(f != nullptr);
+
+   uint16_t raw = static_cast<uint16_t>(f->data[2]) |
+                  (static_cast<uint16_t>(f->data[3]) << 8);
+   if (raw != expectedRaw)
+   {
+      std::cout << "  Low-voltage raw mismatch: got 0x" << std::hex << raw
+                << " expected 0x" << expectedRaw << "\n";
+   }
+
+   ASSERT(raw == expectedRaw);
+}
+
+// ---------------------------------------------------------------------------
 // Test: 0x25 reply is suppressed when MebBms is not alive (time too large)
 // ---------------------------------------------------------------------------
 static void test_cell_avg_reply_suppressed_when_not_alive()
@@ -509,6 +545,7 @@ REGISTER_TEST(RoadsterBmbTest,
    test_cell_avg_reply_on_tenth_0x25,
    test_cell_avg_reply_voltage_values,
    test_sheet_voltage_params_use_spoofed_curve,
+   test_low_voltage_below_meb_curve_is_not_inflated,
    test_cell_avg_reply_suppressed_when_not_alive,
    test_fahrbereit_log_replay_cell_avg,
    test_internal_therms_excluded_from_min_max
