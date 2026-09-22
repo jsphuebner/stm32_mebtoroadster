@@ -94,7 +94,7 @@ static float EstimateRoadsterVoltage(float soc)
 
 static int ReportedRawVoltage(float cellVoltageMv)
 {
-   if (cellVoltageMv <= MebBms::SocCurveMinVoltage)
+   if (cellVoltageMv < MebBms::SocCurveMinVoltage)
       return static_cast<int>(std::round(cellVoltageMv * RoadsterRawVoltageScale));
 
    const float roadsterVoltageMv = EstimateRoadsterVoltage(MebBms::LookupSocFromVoltage(cellVoltageMv));
