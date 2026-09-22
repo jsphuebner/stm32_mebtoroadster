@@ -99,7 +99,7 @@ static int EncodedRawVoltage(float cellVoltageMv)
 
 static int ReportedRawVoltage(float cellVoltageMv)
 {
-   if (cellVoltageMv < MebBms::SocCurveMinVoltage)
+   if (cellVoltageMv < MebBms::SocCurveMinVoltage || cellVoltageMv > MebBms::SocCurveMaxVoltage)
       return EncodedRawVoltage(cellVoltageMv);
 
    const float roadsterVoltageMv = EstimateRoadsterVoltage(MebBms::LookupSocFromVoltage(cellVoltageMv));
