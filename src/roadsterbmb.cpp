@@ -49,7 +49,9 @@ static const int RoadsterThermistorsPerSheet = 6;
 // external sensors used for min/max reporting.
 static const int RoadsterExternalThermistorsPerSheet = 4;
 static const float RoadsterRawVoltageScale = 8.192f;
-static const float RoadsterRawVoltageBias = 0.499f;
+// Subtract just under half an ADC count before rounding so remapped voltages
+// bias downward by one count unless they already land on an exact curve point.
+static const float RoadsterRawVoltageBias = 0.5f - 0.001f;
 static const int TotalRoadsterBricks = RoadsterBmb::NumSheets * RoadsterBricksPerSheet;
 static const int MebThermistors = MebBms::NumCells / 12;
 static const int TotalRoadsterThermistors = RoadsterBmb::NumSheets * RoadsterThermistorsPerSheet;
