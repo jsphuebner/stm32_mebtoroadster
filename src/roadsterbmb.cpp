@@ -92,6 +92,17 @@ static float EstimateRoadsterVoltage(float soc)
    return roadsterVoltageToSoc[RoadsterCurveTableItems - 1].voltageMv;
 }
 
+static bool IsRoadsterCurvePoint(float voltageMv)
+{
+   for (int i = 0; i < RoadsterCurveTableItems; i++)
+   {
+      if (std::fabs(voltageMv - roadsterVoltageToSoc[i].voltageMv) < 0.001f)
+         return true;
+   }
+
+   return false;
+}
+
 static int EncodedRawVoltage(float cellVoltageMv)
 {
    return static_cast<int>(std::round(cellVoltageMv * RoadsterRawVoltageScale));
@@ -103,6 +114,8 @@ static int ReportedRawVoltage(float cellVoltageMv)
       return EncodedRawVoltage(cellVoltageMv);
 
    const float roadsterVoltageMv = EstimateRoadsterVoltage(MebBms::LookupSocFromVoltage(cellVoltageMv));
+   if (IsRoadsterCurvePoint(roadsterVoltageMv))
+      return EncodedRawVoltage(roadsterVoltageMv);
 
    // Bias slightly low so the Roadster sees at most the intended SoC while
    // still preserving exact raw-voltage step values when the remapped voltage
