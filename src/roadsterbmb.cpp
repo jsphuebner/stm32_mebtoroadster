@@ -49,6 +49,7 @@ static const int RoadsterThermistorsPerSheet = 6;
 // external sensors used for min/max reporting.
 static const int RoadsterExternalThermistorsPerSheet = 4;
 static const float RoadsterRawVoltageScale = 8.192f;
+static const float RoadsterRawVoltageBias = 0.499f;
 static const int TotalRoadsterBricks = RoadsterBmb::NumSheets * RoadsterBricksPerSheet;
 static const int MebThermistors = MebBms::NumCells / 12;
 static const int TotalRoadsterThermistors = RoadsterBmb::NumSheets * RoadsterThermistorsPerSheet;
@@ -121,10 +122,12 @@ static int ReportedRawVoltage(float cellVoltageMv)
       return static_cast<int>(std::round(cellVoltageMv * RoadsterRawVoltageScale));
 
    const float roadsterVoltageMv = EstimateRoadsterVoltage(EstimateMebSoc(cellVoltageMv));
+   const float roadsterRawVoltage = roadsterVoltageMv * RoadsterRawVoltageScale;
 
    // Bias slightly low so the Roadster sees at most the intended SoC while
-   // keeping the reported voltage close to the physical pack voltage.
-   return static_cast<int>(std::floor(roadsterVoltageMv * RoadsterRawVoltageScale));
+   // still preserving exact raw-voltage step values when the remapped voltage
+   // lands exactly on a Roadster ADC count.
+   return static_cast<int>(std::round(roadsterRawVoltage - RoadsterRawVoltageBias));
 }
 
 static int MappedCellIndex(int sheet, int brick)

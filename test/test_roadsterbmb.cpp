@@ -315,8 +315,8 @@ static void test_cell_avg_reply_on_tenth_0x25()
 // Test: 0x25 reply voltage values are spoofed onto the Roadster curve
 //
 // For 3680 mV on the MEB curve: SoC ≈ 49.76 %, which maps to ≈ 3814.28 mV on
-// the Roadster curve. The implementation floors the final raw value, yielding
-// floor(3814.28 * 8.192) = 31246 = 0x7A0E.
+// the Roadster curve. The implementation biases the final raw value slightly
+// low before rounding, yielding 31246 = 0x7A0E.
 // ---------------------------------------------------------------------------
 static void test_cell_avg_reply_voltage_values()
 {
