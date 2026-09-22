@@ -83,7 +83,7 @@ static const int RoadsterCurveTableItems = sizeof(roadsterVoltageToSoc) / sizeof
 static float EstimateMebSoc(float cellVoltageMv)
 {
    const float clampedVoltage = MIN(static_cast<float>(MebCurveMaxVoltageMv), cellVoltageMv);
-   const float lookupVoltage = MAX(static_cast<float>(MebCurveGranularityMv), clampedVoltage - MebCurveMinVoltageMv);
+   const float lookupVoltage = MAX(0.0f, clampedVoltage - MebCurveMinVoltageMv);
    const int socIndex = static_cast<int>(lookupVoltage) / MebCurveGranularityMv;
 
    if (socIndex >= (MebCurveTableItems - 1))
