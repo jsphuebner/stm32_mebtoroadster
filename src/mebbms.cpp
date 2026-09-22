@@ -164,14 +164,21 @@ float MebBms::GetMaximumDischargeCurrent(float cellVoltageCutoff)
 
 float MebBms::EstimateSocFromVoltage()
 {
-   int lookupVoltage = MIN(tableMaxVtg, minCellVoltage) - tableMinVtg;
-   lookupVoltage = MAX(socCurveGranularity, lookupVoltage);
+   return LookupSocFromVoltage(minCellVoltage) / 100;
+}
+
+float MebBms::LookupSocFromVoltage(float cellVoltageMv)
+{
+   float clampedVoltage = MIN((float)tableMaxVtg, MAX((float)tableMinVtg, cellVoltageMv));
+   float lookupVoltage = clampedVoltage - tableMinVtg;
    int socIndex = lookupVoltage / socCurveGranularity;
+
+   if (socIndex >= (socCurveTableItems - 1))
+      return vtgToSoc[socCurveTableItems - 1];
+
    float socFraction = (lookupVoltage - (socIndex * socCurveGranularity)) / (float)socCurveGranularity;
    float diff = vtgToSoc[socIndex + 1] - vtgToSoc[socIndex];
-   float soc = vtgToSoc[socIndex] + diff * socFraction;
-
-   return soc / 100;
+   return vtgToSoc[socIndex] + diff * socFraction;
 }
 
 float MebBms::GetRemainingEnergy(float soc)

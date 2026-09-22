@@ -53,15 +53,7 @@ static const float RoadsterRawVoltageBias = 0.499f;
 static const int TotalRoadsterBricks = RoadsterBmb::NumSheets * RoadsterBricksPerSheet;
 static const int MebThermistors = MebBms::NumCells / 12;
 static const int TotalRoadsterThermistors = RoadsterBmb::NumSheets * RoadsterThermistorsPerSheet;
-static const uint16_t mebVoltageToSoc[] =
-{
-   /*2.85V  2.90  2.95  3.00  3.05 3.10  3.15  3.20  3.25  3.30  3.35  3.40  3.45  3.50  3.55  3.60  3.65  3.70  3.75  3.80  3.85  3.90  3.95  4.00  4.05  4.10  4.15  4.20  */
-   0,     12,   31,   55,   80,   116,  153,  202,  239,  325,  496,  701,  1231, 1794, 2307, 3368, 4388, 5368, 5949, 6326, 6742, 7232, 7708, 8104, 8575, 8996, 9446, 10000
-};
 static const int MebCurveMinVoltageMv = 2850;
-static const int MebCurveMaxVoltageMv = 4200;
-static const int MebCurveGranularityMv = 50;
-static const int MebCurveTableItems = sizeof(mebVoltageToSoc) / sizeof(mebVoltageToSoc[0]);
 
 struct RoadsterVoltageSocPoint
 {
@@ -80,21 +72,6 @@ static const RoadsterVoltageSocPoint roadsterVoltageToSoc[] =
    { 4200, 10000 }
 };
 static const int RoadsterCurveTableItems = sizeof(roadsterVoltageToSoc) / sizeof(roadsterVoltageToSoc[0]);
-
-static float EstimateMebSoc(float cellVoltageMv)
-{
-   const float clampedVoltage = MIN(static_cast<float>(MebCurveMaxVoltageMv),
-                                    MAX(static_cast<float>(MebCurveMinVoltageMv), cellVoltageMv));
-   const float lookupVoltage = clampedVoltage - MebCurveMinVoltageMv;
-   const int socIndex = static_cast<int>(lookupVoltage) / MebCurveGranularityMv;
-
-   if (socIndex >= (MebCurveTableItems - 1))
-      return mebVoltageToSoc[MebCurveTableItems - 1];
-
-   const float socFraction = (lookupVoltage - (socIndex * MebCurveGranularityMv)) / static_cast<float>(MebCurveGranularityMv);
-   const float diff = mebVoltageToSoc[socIndex + 1] - mebVoltageToSoc[socIndex];
-   return mebVoltageToSoc[socIndex] + diff * socFraction;
-}
 
 static float EstimateRoadsterVoltage(float soc)
 {
@@ -121,7 +98,7 @@ static int ReportedRawVoltage(float cellVoltageMv)
    if (cellVoltageMv <= MebCurveMinVoltageMv)
       return static_cast<int>(std::round(cellVoltageMv * RoadsterRawVoltageScale));
 
-   const float roadsterVoltageMv = EstimateRoadsterVoltage(EstimateMebSoc(cellVoltageMv));
+   const float roadsterVoltageMv = EstimateRoadsterVoltage(MebBms::LookupSocFromVoltage(cellVoltageMv));
    const float roadsterRawVoltage = roadsterVoltageMv * RoadsterRawVoltageScale;
 
    // Bias slightly low so the Roadster sees at most the intended SoC while
