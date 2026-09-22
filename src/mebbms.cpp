@@ -105,7 +105,8 @@ void MebBms::HandleRx(uint32_t canId, uint32_t data[2], uint8_t)
    else if (canId >= 0x1A5555F4 && canId <= 0x1A5555FB)
    {
       int cmu = (canId & 0xF) - 4;
-      temps[cmu] = ((data[1] >> 4) & 0xFF) * 0.5f - 40;
+      float temp = ((data[1] >> 4) & 0xFF) * 0.5f - 40;
+      temps[cmu] = IIRFILTERF(temps[cmu], temp, 4);
       lastReceived[cmu] = canHardware->GetLastRxTimestamp();
 
       if (cmu == 0)
