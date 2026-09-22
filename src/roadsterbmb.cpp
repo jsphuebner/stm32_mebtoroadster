@@ -53,7 +53,6 @@ static const float RoadsterRawVoltageBias = 0.499f;
 static const int TotalRoadsterBricks = RoadsterBmb::NumSheets * RoadsterBricksPerSheet;
 static const int MebThermistors = MebBms::NumCells / 12;
 static const int TotalRoadsterThermistors = RoadsterBmb::NumSheets * RoadsterThermistorsPerSheet;
-static const int MebCurveMinVoltageMv = 2850;
 
 struct RoadsterVoltageSocPoint
 {
@@ -95,7 +94,7 @@ static float EstimateRoadsterVoltage(float soc)
 
 static int ReportedRawVoltage(float cellVoltageMv)
 {
-   if (cellVoltageMv <= MebCurveMinVoltageMv)
+   if (cellVoltageMv <= MebBms::SocCurveMinVoltage)
       return static_cast<int>(std::round(cellVoltageMv * RoadsterRawVoltageScale));
 
    const float roadsterVoltageMv = EstimateRoadsterVoltage(MebBms::LookupSocFromVoltage(cellVoltageMv));

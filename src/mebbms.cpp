@@ -32,10 +32,7 @@ const uint16_t socToSoe[] =
    0,   415,  870,   1334, 1803, 2278, 2758, 3241, 3727, 4216, 4709, 5206, 5707, 6217, 6734, 7259, 7791, 8331, 8879, 9434, 10000
 };
 
-static const uint16_t tableMinVtg = 2850;
-static const uint16_t tableMaxVtg = 4200;
 static const uint8_t socCurveTableItems = sizeof(vtgToSoc) / sizeof(vtgToSoc[0]);
-static const uint8_t socCurveGranularity = 50;
 static const uint8_t energyCurveTableItems = sizeof(socToSoe) / sizeof(socToSoe[0]);
 static const float energyCurveGranularity = 100.0f / (energyCurveTableItems - 1);
 
@@ -169,14 +166,14 @@ float MebBms::EstimateSocFromVoltage()
 
 float MebBms::LookupSocFromVoltage(float cellVoltageMv)
 {
-   float clampedVoltage = MIN((float)tableMaxVtg, MAX((float)tableMinVtg, cellVoltageMv));
-   float lookupVoltage = clampedVoltage - tableMinVtg;
-   int socIndex = lookupVoltage / socCurveGranularity;
+   float clampedVoltage = MIN((float)SocCurveMaxVoltage, MAX((float)SocCurveMinVoltage, cellVoltageMv));
+   float lookupVoltage = clampedVoltage - SocCurveMinVoltage;
+   int socIndex = lookupVoltage / SocCurveGranularity;
 
    if (socIndex >= (socCurveTableItems - 1))
       return vtgToSoc[socCurveTableItems - 1];
 
-   float socFraction = (lookupVoltage - (socIndex * socCurveGranularity)) / (float)socCurveGranularity;
+   float socFraction = (lookupVoltage - (socIndex * SocCurveGranularity)) / (float)SocCurveGranularity;
    float diff = vtgToSoc[socIndex + 1] - vtgToSoc[socIndex];
    return vtgToSoc[socIndex] + diff * socFraction;
 }
