@@ -252,7 +252,7 @@ bool MebBms::Alive(uint32_t time)
    {
       lastRecv = MIN(lastReceived[i], lastRecv);
    }
-   return (time - lastRecv) < 100;
+   return (time - lastRecv) < 300;
 }
 
 void MebBms::Accumulate()
