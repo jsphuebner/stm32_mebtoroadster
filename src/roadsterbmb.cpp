@@ -574,7 +574,7 @@ void RoadsterBmb::SendBroadcastCellAvgReplies(int startSheet, int numSheets)
 
 void RoadsterBmb::UpdateReportedRawVoltages(MebBms& mebBms)
 {
-   const float commonBatterySoc = MebBms::LookupSocFromVoltage(mebBms.GetMinCellVoltage());
+   const float commonBatterySoc = MebBms::LookupSocFromVoltage(mebBms.GetAvgCellVoltage());
    const float roadsterVoltageOffset = RoadsterVoltageOffset(commonBatterySoc);
 
    for (int cell = 0; cell < MebBms::NumCells; cell++)

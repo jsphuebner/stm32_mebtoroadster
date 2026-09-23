@@ -458,8 +458,8 @@ static void test_low_voltage_uses_common_offset()
 // ---------------------------------------------------------------------------
 static void test_common_offset_preserves_cell_delta()
 {
-   static const int expectedMinRaw = 0x7A0E;
-   static const int expectedMaxRaw = 0x7D41;
+   static const int expectedMinRaw = 0x7A12;
+   static const int expectedMaxRaw = 0x7D45;
 
    FillMebVoltages(*canStub, 3680);
    FillMebVoltageGroup(*canStub, 0x1C0, 3680, 3780, 3780, 3780);
