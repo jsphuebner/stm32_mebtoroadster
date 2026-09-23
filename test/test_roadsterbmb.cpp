@@ -91,6 +91,18 @@ static void FillMebVoltages(MultiCanStub& stub, uint32_t targetMv)
    }
 }
 
+static void FillMebVoltageGroup(MultiCanStub& stub, uint32_t canId, uint32_t c0Mv, uint32_t c1Mv, uint32_t c2Mv, uint32_t c3Mv)
+{
+   const uint32_t c0 = c0Mv - 1000u;
+   const uint32_t c1 = c1Mv - 1000u;
+   const uint32_t c2 = c2Mv - 1000u;
+   const uint32_t c3 = c3Mv - 1000u;
+
+   gData[0] = (c0 << 12) | ((c1 & 0xFF) << 24);
+   gData[1] = (c1 >> 8) | (c2 << 4) | (c3 << 16);
+   stub.HandleRx(canId, gData, 8);
+}
+
 // ---------------------------------------------------------------------------
 // Inject a MEB module temperature so RoadsterBmb::Update() sees it.
 //
@@ -406,12 +418,12 @@ static void test_sheet_voltage_params_use_spoofed_curve()
 }
 
 // ---------------------------------------------------------------------------
-// Test: voltages below the MEB curve minimum are not inflated to the Roadster
-//       0 % point
+// Test: voltages below the MEB curve minimum use the same common chemistry
+//       offset as the rest of the pack
 // ---------------------------------------------------------------------------
-static void test_low_voltage_below_meb_curve_is_not_inflated()
+static void test_low_voltage_uses_common_offset()
 {
-   static const uint16_t expectedRaw = 0x599A; // round(2800 * 8.192)
+   static const uint16_t expectedRaw = 0x5E66; // round((2800 + 150) * 8.192)
 
    FillMebVoltages(*canStub, 2800);
    roadster->Update(*mebBms, 2);
@@ -439,6 +451,33 @@ static void test_low_voltage_below_meb_curve_is_not_inflated()
    }
 
    ASSERT(raw == expectedRaw);
+}
+
+// ---------------------------------------------------------------------------
+// Test: common chemistry offset preserves real cell-to-cell voltage deltas
+// ---------------------------------------------------------------------------
+static void test_common_offset_preserves_cell_delta()
+{
+   static const int expectedMinRaw = 0x7A0E;
+   static const int expectedMaxRaw = 0x7D41;
+
+   FillMebVoltages(*canStub, 3680);
+   FillMebVoltageGroup(*canStub, 0x1C0, 3680, 3780, 3780, 3780);
+   roadster->Update(*mebBms, 2);
+
+   const int vMin = Param::GetInt(Param::bmb1_v_min);
+   const int vMax = Param::GetInt(Param::bmb1_v_max);
+
+   if (vMin != expectedMinRaw || vMax != expectedMaxRaw)
+   {
+      std::cout << "  Unexpected preserved delta values:"
+                << " vMin=0x" << std::hex << vMin
+                << " vMax=0x" << vMax << "\n";
+   }
+
+   ASSERT(vMin == expectedMinRaw);
+   ASSERT(vMax == expectedMaxRaw);
+   ASSERT((vMax - vMin) == (expectedMaxRaw - expectedMinRaw));
 }
 
 // ---------------------------------------------------------------------------
@@ -504,6 +543,27 @@ static void test_cell_avg_reply_suppressed_when_not_alive()
       }
    }
    ASSERT(!found);
+}
+
+// ---------------------------------------------------------------------------
+// Test: clearing a sheet does not overwrite the last valid sheet voltages with
+//       temporary 0 V values
+// ---------------------------------------------------------------------------
+static void test_clear_sheet_preserves_last_valid_voltages()
+{
+   FillMebVoltages(*canStub, 3680);
+   roadster->Update(*mebBms, 2);
+
+   const int previousMin = Param::GetInt(Param::bmb1_v_min);
+   const int previousMax = Param::GetInt(Param::bmb1_v_max);
+   const int previousSum = Param::GetInt(Param::bmb1_v_sum_avg);
+
+   roadster->Update(*mebBms, 200);
+
+   ASSERT(Param::GetInt(Param::bmb1_v_min) == previousMin);
+   ASSERT(Param::GetInt(Param::bmb1_v_max) == previousMax);
+   ASSERT(Param::GetInt(Param::bmb1_v_sum_avg) == previousSum);
+   ASSERT(Param::GetInt(Param::bmb1_can_pwr_ok) == 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -580,9 +640,11 @@ REGISTER_TEST(RoadsterBmbTest,
    test_cell_avg_reply_on_tenth_0x25,
    test_cell_avg_reply_voltage_values,
    test_sheet_voltage_params_use_spoofed_curve,
-   test_low_voltage_below_meb_curve_is_not_inflated,
+   test_low_voltage_uses_common_offset,
+   test_common_offset_preserves_cell_delta,
    test_high_voltage_above_meb_curve_keeps_raw_encoding,
    test_cell_avg_reply_suppressed_when_not_alive,
+   test_clear_sheet_preserves_last_valid_voltages,
    test_fahrbereit_log_replay_cell_avg,
    test_internal_therms_excluded_from_min_max
 );

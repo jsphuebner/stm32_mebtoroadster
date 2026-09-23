@@ -40,6 +40,7 @@ class MebBms : public CanCallback
       float GetTotalVoltage() { return totalVoltage / 1000.0f; }
       float EstimateSocFromVoltage();
       static float LookupSocFromVoltage(float cellVoltageMv);
+      static float LookupVoltageFromSoc(float soc);
       float GetMaximumAmpHours() { return maxAh; }
       void SetMaximumAmpHours(float a) { maxAh = a; }
       float GetRemainingEnergy(float soc);

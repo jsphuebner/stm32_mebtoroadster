@@ -179,6 +179,25 @@ float MebBms::LookupSocFromVoltage(float cellVoltageMv)
    return vtgToSoc[socIndex] + diff * socFraction;
 }
 
+float MebBms::LookupVoltageFromSoc(float soc)
+{
+   if (soc <= vtgToSoc[0])
+      return SocCurveMinVoltage;
+
+   for (int i = 0; i < (socCurveTableItems - 1); i++)
+   {
+      if (soc <= vtgToSoc[i + 1])
+      {
+         const float voltageAtIndex = SocCurveMinVoltage + i * SocCurveGranularity;
+         const float socDiff = vtgToSoc[i + 1] - vtgToSoc[i];
+         const float socFraction = socDiff > 0 ? (soc - vtgToSoc[i]) / socDiff : 0.0f;
+         return voltageAtIndex + socFraction * SocCurveGranularity;
+      }
+   }
+
+   return SocCurveMaxVoltage;
+}
+
 float MebBms::GetRemainingEnergy(float soc)
 {
    const float nominalVoltage = 3.67f;

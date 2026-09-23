@@ -110,19 +110,22 @@ static int EncodedRawVoltage(float cellVoltageMv)
    return static_cast<int>(std::round(cellVoltageMv * RoadsterRawVoltageScale));
 }
 
-static int ReportedRawVoltage(float cellVoltageMv)
+static float RoadsterVoltageOffset(float commonBatterySoc)
 {
-   if (cellVoltageMv < MebBms::SocCurveMinVoltage || cellVoltageMv > MebBms::SocCurveMaxVoltage)
-      return EncodedRawVoltage(cellVoltageMv);
-
-   const float roadsterVoltageMv = EstimateRoadsterVoltage(MebBms::LookupSocFromVoltage(cellVoltageMv));
+   const float roadsterVoltageMv = EstimateRoadsterVoltage(commonBatterySoc);
+   const float mebVoltageMv = MebBms::LookupVoltageFromSoc(commonBatterySoc);
    if (IsRoadsterCurvePoint(roadsterVoltageMv))
-      return EncodedRawVoltage(roadsterVoltageMv);
+      return roadsterVoltageMv - mebVoltageMv;
 
    // Bias slightly low so the Roadster sees at most the intended SoC while
    // still preserving exact raw-voltage step values when the remapped voltage
    // lands exactly on a Roadster ADC count.
-   return EncodedRawVoltage(roadsterVoltageMv - (RoadsterRawVoltageBias / RoadsterRawVoltageScale));
+   return roadsterVoltageMv - mebVoltageMv - (RoadsterRawVoltageBias / RoadsterRawVoltageScale);
+}
+
+static int ReportedRawVoltage(float cellVoltageMv, float roadsterVoltageOffset)
+{
+   return EncodedRawVoltage(cellVoltageMv + roadsterVoltageOffset);
 }
 
 static int MappedCellIndex(int sheet, int brick)
@@ -571,8 +574,11 @@ void RoadsterBmb::SendBroadcastCellAvgReplies(int startSheet, int numSheets)
 
 void RoadsterBmb::UpdateReportedRawVoltages(MebBms& mebBms)
 {
+   const float commonBatterySoc = MebBms::LookupSocFromVoltage(mebBms.GetMinCellVoltage());
+   const float roadsterVoltageOffset = RoadsterVoltageOffset(commonBatterySoc);
+
    for (int cell = 0; cell < MebBms::NumCells; cell++)
-      reportedRawVoltages[cell] = ReportedRawVoltage(mebBms.GetCellVoltage(cell));
+      reportedRawVoltages[cell] = ReportedRawVoltage(mebBms.GetCellVoltage(cell), roadsterVoltageOffset);
 }
 
 void RoadsterBmb::FillFirmwareReply(uint8_t subLo, uint8_t subHi, uint8_t* buf)
@@ -594,15 +600,6 @@ void RoadsterBmb::FillFirmwareReply(uint8_t subLo, uint8_t subHi, uint8_t* buf)
 
 void RoadsterBmb::ClearSheet(const SheetParams& params, int alarmReason)
 {
-   Param::SetInt(params.balMinV, 0);
-   Param::SetInt(params.balMinBrick, 0);
-   Param::SetInt(params.balMaxV, 0);
-   Param::SetInt(params.balMaxBrick, 0);
-   Param::SetInt(params.vMin, 0);
-   Param::SetInt(params.vMax, 0);
-   Param::SetInt(params.vSumAvg, 0);
-   Param::SetInt(params.vMinBrick, 0);
-   Param::SetInt(params.vMaxBrick, 0);
    Param::SetInt(params.tMin, 0);
    Param::SetInt(params.tMax, 0);
    Param::SetInt(params.tAvg, 0);
