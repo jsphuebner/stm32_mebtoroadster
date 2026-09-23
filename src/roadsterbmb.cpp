@@ -300,6 +300,9 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
 
    if (alive)
       UpdateReportedRawVoltages(mebBms);
+   else
+      for (int cell = 0; cell < MebBms::NumCells; cell++)
+         reportedRawVoltages[cell] = 0;
 
    for (int sheet = 0; sheet < NumSheets; sheet++)
    {
@@ -578,7 +581,10 @@ void RoadsterBmb::UpdateReportedRawVoltages(MebBms& mebBms)
    const float roadsterVoltageOffset = RoadsterVoltageOffset(commonBatterySoc);
 
    for (int cell = 0; cell < MebBms::NumCells; cell++)
-      reportedRawVoltages[cell] = ReportedRawVoltage(mebBms.GetCellVoltage(cell), roadsterVoltageOffset);
+   {
+      const float cellVoltage = mebBms.GetCellVoltage(cell);
+      reportedRawVoltages[cell] = cellVoltage < 1000 ? 0 : ReportedRawVoltage(cellVoltage, roadsterVoltageOffset);
+   }
 }
 
 void RoadsterBmb::FillFirmwareReply(uint8_t subLo, uint8_t subHi, uint8_t* buf)
