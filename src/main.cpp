@@ -50,7 +50,6 @@ static Stm32Can* bmsCan;
 static Stm32Can* bmbCan;
 static CanMap* canMap;
 static RoadsterBmb* roadsterBmb;
-static IsaShunt* isa;
 MebBms* mebBms;
 static float cdmSoc;
 
@@ -60,12 +59,12 @@ static void CalculateCdmSoc(void)
    static int32_t asOffset = 0;
    static uint16_t noCurrentTicks = 0;
    static bool initialized = false;
-   const float current = isa->GetValue(IsaShunt::CURRENT) / 1000.0f;
+   const float current = 0;//isa->GetValue(IsaShunt::CURRENT) / 1000.0f;
 
    if (!initialized)
    {
       estimatedSoc = MIN(100.0f, MAX(0.0f, mebBms->EstimateSocFromVoltage()));
-      asOffset = isa->GetValue(IsaShunt::AS);
+      asOffset = 0;//isa->GetValue(IsaShunt::AS);
       initialized = true;
    }
 
@@ -77,12 +76,12 @@ static void CalculateCdmSoc(void)
    if (noCurrentTicks >= 1800) // 3 minutes at 100 ms task rate
    {
       estimatedSoc = MIN(100.0f, MAX(0.0f, mebBms->EstimateSocFromVoltage()));
-      asOffset = isa->GetValue(IsaShunt::AS);
+      asOffset = 0;//isa->GetValue(IsaShunt::AS);
       cdmSoc = estimatedSoc;
    }
    else
    {
-      const int32_t as = isa->GetValue(IsaShunt::AS) - asOffset;
+      const int32_t as = /*isa->GetValue(IsaShunt::AS)*/ - asOffset;
       const float ah = as / 3600.0f;
       const float maxAh = MAX(1.0f, mebBms->GetMaximumAmpHours());
       const float soc = estimatedSoc + (100.0f * ah / maxAh);
@@ -108,9 +107,8 @@ static void Ms100Task(void)
    float cpuLoad = scheduler->GetCpuLoad();
    //This sets a fixed point value WITHOUT calling the parm_Change() function
    Param::SetFloat(Param::cpuload, cpuLoad / 10);
-   isa->InitializeAndStartIfNeeded();
    CalculateCdmSoc();
-   mebBms->Balance(Param::GetBool(Param::balance), balanceCell);
+   bool balancing = mebBms->Balance(Param::GetBool(Param::balance), balanceCell);
 
    canMap->SendAll();
 
@@ -118,6 +116,10 @@ static void Ms100Task(void)
 
    mebBms->Accumulate();
    ChaDeMo::UpdateParams(*mebBms, cdmSoc);
+   Param::SetFloat(Param::cellvtg_min, mebBms->GetMinCellVoltage());
+   Param::SetFloat(Param::cellvtg_max, mebBms->GetMaxCellVoltage());
+   Param::SetFloat(Param::cellvtg_avg, mebBms->GetAvgCellVoltage());
+   Param::SetInt(Param::balancing, balancing);
 }
 
 static void Ms10Task(void)
@@ -176,7 +178,6 @@ int main(void)
    CanSdo sdo(&c, &cm);
    sdo.SetNodeId(33); //Set node ID for SDO access e.g. by wifi module
    MebBms meb(&c);
-   IsaShunt i(&c, IsaShunt::CURRENT | IsaShunt::AS);
    ChaDeMo chademo(&c);
    RoadsterBmb roadster(&c2);
    //store a pointer for easier access
@@ -184,7 +185,6 @@ int main(void)
    bmbCan = &c2;
    canMap = &cm;
    mebBms = &meb;
-   isa = &i;
    roadsterBmb = &roadster;
    mebBms->SetMaximumAmpHours(Param::GetFloat(Param::ahmax));
    mebBms->SetControllerGains(Param::GetInt(Param::chargekp), Param::GetInt(Param::chargeki));
@@ -206,7 +206,6 @@ int main(void)
 
    //backward compatibility, version 4 was the first to support the "stream" command
    Param::SetInt(Param::version, 4);
-   Param::Change(Param::PARAM_LAST); //Call callback one for general parameter propagation
 
    //Now all our main() does is running the terminal
    //All other processing takes place in the scheduler or other interrupt service routines

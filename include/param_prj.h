@@ -39,7 +39,7 @@
  */
 
  //Define a version string of your firmware here
-#define VER 1.06.R
+#define VER 1.07.R
 
 /* Entries must be ordered as follows:
    1. Saveable parameters (id != 0)
@@ -47,7 +47,7 @@
    3. Display values
  */
 //Next param id (increase when adding new parameter!): 10
-//Next value Id: 2389
+//Next value Id: 2393
 /*              category     name         unit       min     max     default id */
 #define PARAM_LIST \
     PARAM_ENTRY(CAT_COMM,    cdmcurlim,   "A",       0,      255,    255,    3   ) \
@@ -61,7 +61,19 @@
     VALUE_ENTRY(opmode,      OPMODES, 2000 ) \
     VALUE_ENTRY(version,     VERSTR,  2001 ) \
     VALUE_ENTRY(lasterr,     errorListString,  2002 ) \
-    VALUE_ENTRY(cpuload,     "%",     2004 ) \
+    VALUE_ENTRY(cellvtg_min,    "mV",  2389) \
+    VALUE_ENTRY(cellvtg_max,    "mV",  2390) \
+    VALUE_ENTRY(cellvtg_avg,    "mV",  2391) \
+    VALUE_ENTRY(balancing,      ONOFF, 2392) \
+    VALUE_ENTRY(cdm_bat_vtg,    "V",   2375) \
+    VALUE_ENTRY(cdm_target_vtg, "V",   2376) \
+    VALUE_ENTRY(cdm_cur_req,    "A",   2377) \
+    VALUE_ENTRY(cdm_soc,        "%",   2378) \
+    VALUE_ENTRY(cdm_enabled,    ONOFF, 2379) \
+    VALUE_ENTRY(cdm_chg_max_cur, "A",  2385) \
+    VALUE_ENTRY(cdm_chg_cur,     "A",  2386) \
+    VALUE_ENTRY(cdm_chg_vtg,     "V",  2387) \
+    VALUE_ENTRY(cdm_chg_status,  "",   2388) \
     VALUE_ENTRY(bmb1_bal_min_v, "raw", 2100) \
     VALUE_ENTRY(bmb1_bal_min_brick, "id", 2101) \
     VALUE_ENTRY(bmb1_bal_max_v, "raw", 2102) \
@@ -304,15 +316,7 @@
     VALUE_ENTRY(bmb11_sheet_alarm, "bit", 2369) \
     VALUE_ENTRY(bmb11_alarm_reason, "id", 2373) \
     VALUE_ENTRY(bmb11_alarm_brick, "id", 2374) \
-    VALUE_ENTRY(cdm_bat_vtg,    "V",   2375) \
-    VALUE_ENTRY(cdm_target_vtg, "V",   2376) \
-    VALUE_ENTRY(cdm_cur_req,    "A",   2377) \
-    VALUE_ENTRY(cdm_soc,        "%",   2378) \
-    VALUE_ENTRY(cdm_enabled,    ONOFF, 2379) \
-    VALUE_ENTRY(cdm_chg_max_cur, "A",  2385) \
-    VALUE_ENTRY(cdm_chg_cur,     "A",  2386) \
-    VALUE_ENTRY(cdm_chg_vtg,     "V",  2387) \
-    VALUE_ENTRY(cdm_chg_status,  "",   2388)
+    VALUE_ENTRY(cpuload,     "%",     2004 ) \
 
 
 

@@ -220,7 +220,7 @@ float MebBms::GetRemainingEnergy(float soc)
    return energyAtSoc * nominalVoltage * NumCells * GetMaximumAmpHours() / 10000;
 }
 
-void MebBms::Balance(bool enable, int& start)
+bool MebBms::Balance(bool enable, int& start)
 {
    const uint16_t balHyst = 4;
    const uint16_t balMin = 3730;
@@ -261,6 +261,7 @@ void MebBms::Balance(bool enable, int& start)
          break;
       }
    }
+   return balancing;
 }
 
 bool MebBms::Alive(uint32_t time)
