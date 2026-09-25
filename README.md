@@ -1,16 +1,15 @@
 # stm32_mebtoroadster
 
-Firmware for a Roadster-style battery message emulator driven by MEB BMS data, with CHaDeMo support and ISA shunt integration.
+Firmware for a Roadster-style battery message emulator driven by MEB BMS data, with CHaDeMo support.
 
 ## High-level architecture
 
 - `MebBms` (CAN1 RX): receives and aggregates MEB cell/module data.
 - `RoadsterBmb` (CAN2 TX): emits Roadster sheet-style BMB messages derived from MEB data.
 - `ChaDeMo` (CAN1 RX/TX via `CanMap`): handles charger telemetry and publishes CHaDeMo status/request frames.
-- `IsaShunt` (CAN1 RX): provides current and ampere-second counters for coulomb-count based SoC tracking.
 - Scheduler:
   - 10 ms task: fast data updates and CAN map transmission path.
-  - 100 ms task: watchdog, background housekeeping, ISA shunt start-up handling, and SoC source update.
+  - 100 ms task: watchdog, background housekeeping, and CHaDeMo state update.
 
 ## CHaDeMo data model
 
@@ -22,14 +21,15 @@ The CHaDeMo-related parameters (`cdm_*`) are filled at runtime:
   - battery max charge current (from `MebBms` current limit logic),
   - user limit (`cdmcurlim`).
 - `cdm_soc`: computed SoC source described below.
+- `cdm_charge_added`: integrated charger output current in ampere-seconds while charging is active.
 - `cdm_enabled`: set while SoC is below 100%.
 - `cdm_chg_*`: live charger telemetry (max current, output current, output voltage, status).
 
 ## SoC strategy
 
-SoC is calculated from ISA shunt ampere-seconds during current flow (coulomb counting).  
-If there is no significant current flow for 3 minutes, SoC falls back to `MebBms::EstimateSocFromVoltage()`.  
-When falling back, the ISA AS offset is re-aligned so integration restarts cleanly when current flow returns.
+While `cdm_chg_status > 0`, CHaDeMo integrates `cdm_chg_cur` in the 100 ms task and uses the accumulated `cdm_charge_added` value for coulomb-count based SoC tracking.  
+If charging remains active but current stays at zero for 3 minutes, SoC falls back to `MebBms::EstimateSocFromVoltage()` and charge integration restarts from zero.  
+When charging is not active, all `cdm_*` values are reset to zero.
 
 ## Build
 

@@ -5,9 +5,9 @@
 CC       = gcc
 CPP      = g++
 LD       = g++
-CFLAGS   = -std=c99  -ggdb -Wall -fpermissive -DSTM32F1 -DMAX_ITEMS=154 -DMAX_MESSAGES=24 \
+CFLAGS   = -std=c99  -ggdb -Wall -fpermissive -DSTM32F1 -DMAX_ITEMS=155 -DMAX_MESSAGES=24 \
            -Itest-include -I../include -I../libopeninv/include -I../libopencm3/include
-CPPFLAGS = -std=c++14 -ggdb -Wall -fpermissive -DSTM32F1 -DMAX_ITEMS=154 -DMAX_MESSAGES=24 \
+CPPFLAGS = -std=c++14 -ggdb -Wall -fpermissive -DSTM32F1 -DMAX_ITEMS=155 -DMAX_MESSAGES=24 \
            -Itest-include -I../include -I../libopeninv/include -I../libopencm3/include \
            -I.
 LDFLAGS  = -g

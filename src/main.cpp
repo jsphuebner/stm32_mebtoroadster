@@ -51,43 +51,6 @@ static Stm32Can* bmbCan;
 static CanMap* canMap;
 static RoadsterBmb* roadsterBmb;
 MebBms* mebBms;
-static float cdmSoc;
-
-static void CalculateCdmSoc(void)
-{
-   static float estimatedSoc = 0;
-   static int32_t asOffset = 0;
-   static uint16_t noCurrentTicks = 0;
-   static bool initialized = false;
-   const float current = 0;//isa->GetValue(IsaShunt::CURRENT) / 1000.0f;
-
-   if (!initialized)
-   {
-      estimatedSoc = MIN(100.0f, MAX(0.0f, mebBms->EstimateSocFromVoltage()));
-      asOffset = 0;//isa->GetValue(IsaShunt::AS);
-      initialized = true;
-   }
-
-   if (ABS(current) > 1.0f)
-      noCurrentTicks = 0;
-   else if (noCurrentTicks < UINT16_MAX)
-      noCurrentTicks++;
-
-   if (noCurrentTicks >= 1800) // 3 minutes at 100 ms task rate
-   {
-      estimatedSoc = MIN(100.0f, MAX(0.0f, mebBms->EstimateSocFromVoltage()));
-      asOffset = 0;//isa->GetValue(IsaShunt::AS);
-      cdmSoc = estimatedSoc;
-   }
-   else
-   {
-      const int32_t as = /*isa->GetValue(IsaShunt::AS)*/ - asOffset;
-      const float ah = as / 3600.0f;
-      const float maxAh = MAX(1.0f, mebBms->GetMaximumAmpHours());
-      const float soc = estimatedSoc + (100.0f * ah / maxAh);
-      cdmSoc = MIN(100.0f, MAX(0.0f, soc));
-   }
-}
 
 //sample 100ms task
 static void Ms100Task(void)
@@ -107,7 +70,6 @@ static void Ms100Task(void)
    float cpuLoad = scheduler->GetCpuLoad();
    //This sets a fixed point value WITHOUT calling the parm_Change() function
    Param::SetFloat(Param::cpuload, cpuLoad / 10);
-   CalculateCdmSoc();
    bool balancing = mebBms->Balance(Param::GetBool(Param::balance), balanceCell);
 
    canMap->SendAll();
@@ -115,7 +77,7 @@ static void Ms100Task(void)
    ErrorMessage::SetTime(rtc_get_counter_val());
 
    mebBms->Accumulate();
-   ChaDeMo::UpdateParams(*mebBms, cdmSoc);
+   ChaDeMo::UpdateParams(*mebBms);
    Param::SetFloat(Param::cellvtg_min, mebBms->GetMinCellVoltage());
    Param::SetFloat(Param::cellvtg_max, mebBms->GetMaxCellVoltage());
    Param::SetFloat(Param::cellvtg_avg, mebBms->GetAvgCellVoltage());
