@@ -32,10 +32,7 @@ const uint16_t socToSoe[] =
    0,   415,  870,   1334, 1803, 2278, 2758, 3241, 3727, 4216, 4709, 5206, 5707, 6217, 6734, 7259, 7791, 8331, 8879, 9434, 10000
 };
 
-static const uint16_t tableMinVtg = 2850;
-static const uint16_t tableMaxVtg = 4200;
 static const uint8_t socCurveTableItems = sizeof(vtgToSoc) / sizeof(vtgToSoc[0]);
-static const uint8_t socCurveGranularity = 50;
 static const uint8_t energyCurveTableItems = sizeof(socToSoe) / sizeof(socToSoe[0]);
 static const float energyCurveGranularity = 100.0f / (energyCurveTableItems - 1);
 
@@ -108,7 +105,8 @@ void MebBms::HandleRx(uint32_t canId, uint32_t data[2], uint8_t)
    else if (canId >= 0x1A5555F4 && canId <= 0x1A5555FB)
    {
       int cmu = (canId & 0xF) - 4;
-      temps[cmu] = ((data[1] >> 4) & 0xFF) * 0.5f - 40;
+      float temp = ((data[1] >> 4) & 0xFF) * 0.5f - 40;
+      temps[cmu] = IIRFILTERF(temps[cmu], temp, 4);
       lastReceived[cmu] = canHardware->GetLastRxTimestamp();
 
       if (cmu == 0)
@@ -164,14 +162,40 @@ float MebBms::GetMaximumDischargeCurrent(float cellVoltageCutoff)
 
 float MebBms::EstimateSocFromVoltage()
 {
-   int lookupVoltage = MIN(tableMaxVtg, minCellVoltage) - tableMinVtg;
-   lookupVoltage = MAX(socCurveGranularity, lookupVoltage);
-   int socIndex = lookupVoltage / socCurveGranularity;
-   float socFraction = (lookupVoltage - (socIndex * socCurveGranularity)) / (float)socCurveGranularity;
-   float diff = vtgToSoc[socIndex + 1] - vtgToSoc[socIndex];
-   float soc = vtgToSoc[socIndex] + diff * socFraction;
+   return LookupSocFromVoltage(minCellVoltage) / 100;
+}
 
-   return soc / 100;
+float MebBms::LookupSocFromVoltage(float cellVoltageMv)
+{
+   float clampedVoltage = MIN((float)SocCurveMaxVoltage, MAX((float)SocCurveMinVoltage, cellVoltageMv));
+   float lookupVoltage = clampedVoltage - SocCurveMinVoltage;
+   int socIndex = lookupVoltage / SocCurveGranularity;
+
+   if (socIndex >= (socCurveTableItems - 1))
+      return vtgToSoc[socCurveTableItems - 1];
+
+   float socFraction = (lookupVoltage - (socIndex * SocCurveGranularity)) / (float)SocCurveGranularity;
+   float diff = vtgToSoc[socIndex + 1] - vtgToSoc[socIndex];
+   return vtgToSoc[socIndex] + diff * socFraction;
+}
+
+float MebBms::LookupVoltageFromSoc(float soc)
+{
+   if (soc <= vtgToSoc[0])
+      return SocCurveMinVoltage;
+
+   for (int i = 0; i < (socCurveTableItems - 1); i++)
+   {
+      if (soc <= vtgToSoc[i + 1])
+      {
+         const float voltageAtIndex = SocCurveMinVoltage + i * SocCurveGranularity;
+         const float socDiff = vtgToSoc[i + 1] - vtgToSoc[i];
+         const float socFraction = socDiff > 0 ? (soc - vtgToSoc[i]) / socDiff : 0.0f;
+         return voltageAtIndex + socFraction * SocCurveGranularity;
+      }
+   }
+
+   return SocCurveMaxVoltage;
 }
 
 float MebBms::GetRemainingEnergy(float soc)
@@ -247,7 +271,7 @@ bool MebBms::Alive(uint32_t time)
    {
       lastRecv = MIN(lastReceived[i], lastRecv);
    }
-   return (time - lastRecv) < 100;
+   return (time - lastRecv) < 300;
 }
 
 void MebBms::Accumulate()

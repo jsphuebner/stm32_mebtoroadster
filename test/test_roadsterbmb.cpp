@@ -91,6 +91,18 @@ static void FillMebVoltages(MultiCanStub& stub, uint32_t targetMv)
    }
 }
 
+static void FillMebVoltageGroup(MultiCanStub& stub, uint32_t canId, uint32_t c0Mv, uint32_t c1Mv, uint32_t c2Mv, uint32_t c3Mv)
+{
+   const uint32_t c0 = c0Mv - 1000u;
+   const uint32_t c1 = c1Mv - 1000u;
+   const uint32_t c2 = c2Mv - 1000u;
+   const uint32_t c3 = c3Mv - 1000u;
+
+   gData[0] = (c0 << 12) | ((c1 & 0xFF) << 24);
+   gData[1] = (c1 >> 8) | (c2 << 4) | (c3 << 16);
+   stub.HandleRx(canId, gData, 8);
+}
+
 // ---------------------------------------------------------------------------
 // Inject a MEB module temperature so RoadsterBmb::Update() sees it.
 //
@@ -312,14 +324,17 @@ static void test_cell_avg_reply_on_tenth_0x25()
 }
 
 // ---------------------------------------------------------------------------
-// Test: 0x25 reply voltage values are correct
+// Test: 0x25 reply voltage values are spoofed onto the Roadster curve
 //
-// For 3000 mV:  RawVoltage = round(3000 * 8.192) = 24576 = 0x6000
-//               little-endian bytes: 0x00, 0x60
+// For 3680 mV on the MEB curve: SoC ≈ 49.76 %, which maps to ≈ 3814.28 mV on
+// the Roadster curve. The implementation biases the final raw value slightly
+// low before rounding, yielding 31246 = 0x7A0E.
 // ---------------------------------------------------------------------------
 static void test_cell_avg_reply_voltage_values()
 {
-   FillMebVoltages(*canStub, 3000);
+   static const uint16_t expectedRaw = 0x7A0E;
+
+   FillMebVoltages(*canStub, 3680);
    roadster->Update(*mebBms, 2);
 
    for (int i = 0; i < 9; i++)
@@ -344,16 +359,16 @@ static void test_cell_avg_reply_voltage_values()
       if (f.canId == replyId && f.data[0] == 0x20 && f.data[1] == 0)
       {
          found = true;
-         // bytes 2-7: three 16-bit LE voltages, all should be 0x6000
+         // bytes 2-7: three 16-bit LE voltages, all should match the spoofed value
          for (int i = 0; i < 3; i++)
          {
             uint16_t raw = static_cast<uint16_t>(f.data[2 + i * 2]) |
                            (static_cast<uint16_t>(f.data[3 + i * 2]) << 8);
-            if (raw != 0x6000)
+            if (raw != expectedRaw)
             {
                std::cout << "  Voltage mismatch at cell " << i
                          << " in msg 0: got 0x" << std::hex << raw
-                         << " expected 0x6000\n";
+                         << " expected 0x" << expectedRaw << "\n";
                voltageOk = false;
             }
          }
@@ -363,6 +378,141 @@ static void test_cell_avg_reply_voltage_values()
 
    ASSERT(found);
    ASSERT(voltageOk);
+}
+
+// ---------------------------------------------------------------------------
+// Test: sheet voltage parameters are spoofed onto the Roadster curve
+// ---------------------------------------------------------------------------
+static void test_sheet_voltage_params_use_spoofed_curve()
+{
+   static const int expectedRaw = 0x7A0E;
+
+   FillMebVoltages(*canStub, 3680);
+   roadster->Update(*mebBms, 2);
+
+   const int balMinV = Param::GetInt(Param::bmb1_bal_min_v);
+   const int balMaxV = Param::GetInt(Param::bmb1_bal_max_v);
+   const int vMin = Param::GetInt(Param::bmb1_v_min);
+   const int vMax = Param::GetInt(Param::bmb1_v_max);
+   const int vSumAvg = Param::GetInt(Param::bmb1_v_sum_avg);
+
+   if (balMinV != expectedRaw || balMaxV != expectedRaw || vMin != expectedRaw || vMax != expectedRaw)
+   {
+      std::cout << "  Unexpected spoofed sheet voltages:"
+               << " balMinV=0x" << std::hex << balMinV
+               << " balMaxV=0x" << balMaxV
+               << " vMin=0x" << vMin
+               << " vMax=0x" << vMax << "\n";
+   }
+   if (vSumAvg != expectedRaw * 9)
+   {
+      std::cout << "  Unexpected spoofed sheet sum: got 0x" << std::hex << vSumAvg
+               << " expected 0x" << (expectedRaw * 9) << "\n";
+   }
+
+   ASSERT(balMinV == expectedRaw);
+   ASSERT(balMaxV == expectedRaw);
+   ASSERT(vMin == expectedRaw);
+   ASSERT(vMax == expectedRaw);
+   ASSERT(vSumAvg == expectedRaw * 9);
+}
+
+// ---------------------------------------------------------------------------
+// Test: voltages below the MEB curve minimum use the same common chemistry
+//       offset as the rest of the pack
+// ---------------------------------------------------------------------------
+static void test_low_voltage_uses_common_offset()
+{
+   static const uint16_t expectedRaw = 0x5E66; // round((2800 + 150) * 8.192)
+
+   FillMebVoltages(*canStub, 2800);
+   roadster->Update(*mebBms, 2);
+
+   for (int i = 0; i < 9; i++)
+   {
+      SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
+      roadster->Update(*mebBms, 10 + static_cast<uint32_t>(i));
+   }
+
+   SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
+
+   canStub->Clear();
+   roadster->Update(*mebBms, 50);
+
+   const MultiCanStub::Frame* f = canStub->FindFrame(CellAvgReplyBaseId, 0x20);
+   ASSERT(f != nullptr);
+
+   uint16_t raw = static_cast<uint16_t>(f->data[2]) |
+                  (static_cast<uint16_t>(f->data[3]) << 8);
+   if (raw != expectedRaw)
+   {
+      std::cout << "  Low-voltage raw mismatch: got 0x" << std::hex << raw
+                << " expected 0x" << expectedRaw << "\n";
+   }
+
+   ASSERT(raw == expectedRaw);
+}
+
+// ---------------------------------------------------------------------------
+// Test: common chemistry offset preserves real cell-to-cell voltage deltas
+// ---------------------------------------------------------------------------
+static void test_common_offset_preserves_cell_delta()
+{
+   static const int expectedMinRaw = 0x7A12;
+   static const int expectedMaxRaw = 0x7D45;
+
+   FillMebVoltages(*canStub, 3680);
+   FillMebVoltageGroup(*canStub, 0x1C0, 3680, 3780, 3780, 3780);
+   roadster->Update(*mebBms, 2);
+
+   const int vMin = Param::GetInt(Param::bmb1_v_min);
+   const int vMax = Param::GetInt(Param::bmb1_v_max);
+
+   if (vMin != expectedMinRaw || vMax != expectedMaxRaw)
+   {
+      std::cout << "  Unexpected preserved delta values:"
+                << " vMin=0x" << std::hex << vMin
+                << " vMax=0x" << vMax << "\n";
+   }
+
+   ASSERT(vMin == expectedMinRaw);
+   ASSERT(vMax == expectedMaxRaw);
+   ASSERT((vMax - vMin) == (expectedMaxRaw - expectedMinRaw));
+}
+
+// ---------------------------------------------------------------------------
+// Test: voltages above the MEB curve maximum keep their direct raw encoding
+// ---------------------------------------------------------------------------
+static void test_high_voltage_above_meb_curve_keeps_raw_encoding()
+{
+   static const uint16_t expectedRaw = 0x899A; // round(4300 * 8.192)
+
+   FillMebVoltages(*canStub, 4300);
+   roadster->Update(*mebBms, 2);
+
+   for (int i = 0; i < 9; i++)
+   {
+      SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
+      roadster->Update(*mebBms, 10 + static_cast<uint32_t>(i));
+   }
+
+   SendFrame(*canStub, NodeBroadcastId, 0x25, 0x00, 0x02, 0x01, 0, 0, 0, 0, 4);
+
+   canStub->Clear();
+   roadster->Update(*mebBms, 50);
+
+   const MultiCanStub::Frame* f = canStub->FindFrame(CellAvgReplyBaseId, 0x20);
+   ASSERT(f != nullptr);
+
+   uint16_t raw = static_cast<uint16_t>(f->data[2]) |
+                  (static_cast<uint16_t>(f->data[3]) << 8);
+   if (raw != expectedRaw)
+   {
+      std::cout << "  High-voltage raw mismatch: got 0x" << std::hex << raw
+                << " expected 0x" << expectedRaw << "\n";
+   }
+
+   ASSERT(raw == expectedRaw);
 }
 
 // ---------------------------------------------------------------------------
@@ -393,6 +543,27 @@ static void test_cell_avg_reply_suppressed_when_not_alive()
       }
    }
    ASSERT(!found);
+}
+
+// ---------------------------------------------------------------------------
+// Test: clearing a sheet does not overwrite the last valid sheet voltages with
+//       temporary 0 V values
+// ---------------------------------------------------------------------------
+static void test_clear_sheet_preserves_last_valid_voltages()
+{
+   FillMebVoltages(*canStub, 3680);
+   roadster->Update(*mebBms, 2);
+
+   const int previousMin = Param::GetInt(Param::bmb1_v_min);
+   const int previousMax = Param::GetInt(Param::bmb1_v_max);
+   const int previousSum = Param::GetInt(Param::bmb1_v_sum_avg);
+
+   roadster->Update(*mebBms, 200);
+
+   ASSERT(Param::GetInt(Param::bmb1_v_min) == previousMin);
+   ASSERT(Param::GetInt(Param::bmb1_v_max) == previousMax);
+   ASSERT(Param::GetInt(Param::bmb1_v_sum_avg) == previousSum);
+   ASSERT(Param::GetInt(Param::bmb1_can_pwr_ok) == 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -468,7 +639,12 @@ REGISTER_TEST(RoadsterBmbTest,
    test_cell_avg_reply_not_sent_before_tenth_request,
    test_cell_avg_reply_on_tenth_0x25,
    test_cell_avg_reply_voltage_values,
+   test_sheet_voltage_params_use_spoofed_curve,
+   test_low_voltage_uses_common_offset,
+   test_common_offset_preserves_cell_delta,
+   test_high_voltage_above_meb_curve_keeps_raw_encoding,
    test_cell_avg_reply_suppressed_when_not_alive,
+   test_clear_sheet_preserves_last_valid_voltages,
    test_fahrbereit_log_replay_cell_avg,
    test_internal_therms_excluded_from_min_max
 );

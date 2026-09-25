@@ -39,12 +39,17 @@ class MebBms : public CanCallback
       float GetAvgCellVoltage() { return totalVoltage / NumCells; }
       float GetTotalVoltage() { return totalVoltage / 1000.0f; }
       float EstimateSocFromVoltage();
+      static float LookupSocFromVoltage(float cellVoltageMv);
+      static float LookupVoltageFromSoc(float soc);
       float GetMaximumAmpHours() { return maxAh; }
       void SetMaximumAmpHours(float a) { maxAh = a; }
       float GetRemainingEnergy(float soc);
       void Balance(bool enable, int& start);
       bool Alive(uint32_t time);
       void Accumulate();
+      static const uint16_t SocCurveMinVoltage = 2850;
+      static const uint16_t SocCurveMaxVoltage = 4200;
+      static const uint8_t SocCurveGranularity = 50;
       static const int NumCells = 96;
 
    private:

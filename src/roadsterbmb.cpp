@@ -48,9 +48,85 @@ static const int RoadsterThermistorsPerSheet = 6;
 // Thermistors 4 and 5 are internal to the BMB; only thermistors 0-3 are
 // external sensors used for min/max reporting.
 static const int RoadsterExternalThermistorsPerSheet = 4;
+static const float RoadsterRawVoltageScale = 8.192f;
+// Subtract just under half an ADC count before rounding so remapped voltages
+// bias downward by one count unless they already land on an exact curve point.
+static const float RoadsterRawVoltageBias = 0.5f - 0.001f;
 static const int TotalRoadsterBricks = RoadsterBmb::NumSheets * RoadsterBricksPerSheet;
 static const int MebThermistors = MebBms::NumCells / 12;
 static const int TotalRoadsterThermistors = RoadsterBmb::NumSheets * RoadsterThermistorsPerSheet;
+
+struct RoadsterVoltageSocPoint
+{
+   int voltageMv;
+   int soc;
+};
+
+static const RoadsterVoltageSocPoint roadsterVoltageToSoc[] =
+{
+   { 3000, 0 },
+   { 3680, 1000 },
+   { 3700, 1500 },
+   { 3760, 2500 },
+   { 3785, 4000 },
+   { 3815, 5000 },
+   { 4200, 10000 }
+};
+static const int RoadsterCurveTableItems = sizeof(roadsterVoltageToSoc) / sizeof(roadsterVoltageToSoc[0]);
+
+static float EstimateRoadsterVoltage(float soc)
+{
+   if (soc <= roadsterVoltageToSoc[0].soc)
+      return roadsterVoltageToSoc[0].voltageMv;
+
+   for (int i = 0; i < (RoadsterCurveTableItems - 1); i++)
+   {
+      const RoadsterVoltageSocPoint& start = roadsterVoltageToSoc[i];
+      const RoadsterVoltageSocPoint& end = roadsterVoltageToSoc[i + 1];
+
+      if (soc <= end.soc)
+      {
+         const float socFraction = (soc - start.soc) / static_cast<float>(end.soc - start.soc);
+         return start.voltageMv + (end.voltageMv - start.voltageMv) * socFraction;
+      }
+   }
+
+   return roadsterVoltageToSoc[RoadsterCurveTableItems - 1].voltageMv;
+}
+
+static bool IsRoadsterCurvePoint(float voltageMv)
+{
+   for (int i = 0; i < RoadsterCurveTableItems; i++)
+   {
+      if (std::fabs(voltageMv - roadsterVoltageToSoc[i].voltageMv) < 0.001f)
+         return true;
+   }
+
+   return false;
+}
+
+static int EncodedRawVoltage(float cellVoltageMv)
+{
+   return static_cast<int>(std::round(cellVoltageMv * RoadsterRawVoltageScale));
+}
+
+static float RoadsterVoltageOffset(float commonBatterySoc)
+{
+   const float roadsterVoltageMv = EstimateRoadsterVoltage(commonBatterySoc);
+   const float mebVoltageMv = MebBms::LookupVoltageFromSoc(commonBatterySoc);
+   if (IsRoadsterCurvePoint(roadsterVoltageMv))
+      return roadsterVoltageMv - mebVoltageMv;
+
+   // Bias slightly low so the Roadster sees at most the intended SoC while
+   // still preserving exact raw-voltage step values when the remapped voltage
+   // lands exactly on a Roadster ADC count.
+   return roadsterVoltageMv - mebVoltageMv - (RoadsterRawVoltageBias / RoadsterRawVoltageScale);
+}
+
+static int ReportedRawVoltage(float cellVoltageMv, float roadsterVoltageOffset)
+{
+   return EncodedRawVoltage(cellVoltageMv + roadsterVoltageOffset);
+}
 
 static int MappedCellIndex(int sheet, int brick)
 {
@@ -141,6 +217,9 @@ RoadsterBmb::RoadsterBmb(CanHardware* txCan)
       for (int j = 0; j < 8; j++) directedReplies[i].data[j] = 0;
    }
 
+   for (int i = 0; i < MebBms::NumCells; i++)
+      reportedRawVoltages[i] = 0;
+
    HandleClear();
 }
 
@@ -219,6 +298,12 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
 {
    const bool alive = mebBms.Alive(time);
 
+   if (alive)
+      UpdateReportedRawVoltages(mebBms);
+   else
+      for (int cell = 0; cell < MebBms::NumCells; cell++)
+         reportedRawVoltages[cell] = 0;
+
    for (int sheet = 0; sheet < NumSheets; sheet++)
    {
       const SheetParams& params = sheetParams[sheet];
@@ -246,7 +331,7 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
          if (cellVoltage < 1000)
             continue;
 
-         const int rawVoltage = RawVoltage(cellVoltage);
+         const int rawVoltage = reportedRawVoltages[mebCell];
          sumRaw += rawVoltage;
          validCount++;
 
@@ -364,7 +449,7 @@ void RoadsterBmb::Update(MebBms& mebBms, uint32_t time)
       {
          static const int CellAvgSheetsPerCycle = 3; // 3 msgs/sheet × 3 sheets = 9 frames, within half the 20-entry buffer
          const int sheetsThisCycle = MIN(CellAvgSheetsPerCycle, NumSheets - cellAvgSheetOffset);
-         SendBroadcastCellAvgReplies(mebBms, cellAvgSheetOffset, sheetsThisCycle);
+         SendBroadcastCellAvgReplies(cellAvgSheetOffset, sheetsThisCycle);
          cellAvgSheetOffset += sheetsThisCycle;
          if (cellAvgSheetOffset >= NumSheets)
          {
@@ -451,7 +536,7 @@ void RoadsterBmb::SendDirectedReplies()
    }
 }
 
-void RoadsterBmb::SendBroadcastCellAvgReplies(MebBms& mebBms, int startSheet, int numSheets)
+void RoadsterBmb::SendBroadcastCellAvgReplies(int startSheet, int numSheets)
 {
    // For each sheet, send 3 messages of 3 bricks each, covering all 9 bricks.
    // Format per message: [0x20, msgIdx, v0_lo, v0_hi, v1_lo, v1_hi, v2_lo, v2_hi]
@@ -480,13 +565,25 @@ void RoadsterBmb::SendBroadcastCellAvgReplies(MebBms& mebBms, int startSheet, in
          {
             const int brick = msgIdx * BricksPerMsg + i;
             const int mebCell = MappedCellIndex(sheet, brick);
-            const int rawV = RawVoltage(mebBms.GetCellVoltage(mebCell));
+            const int rawV = reportedRawVoltages[mebCell];
             data[2 + i * 2]     = static_cast<uint8_t>(rawV & 0xFF);
             data[2 + i * 2 + 1] = static_cast<uint8_t>((rawV >> 8) & 0xFF);
          }
 
          canHardware->Send(replyId, data, 8);
       }
+   }
+}
+
+void RoadsterBmb::UpdateReportedRawVoltages(MebBms& mebBms)
+{
+   const float commonBatterySoc = MebBms::LookupSocFromVoltage(mebBms.GetAvgCellVoltage());
+   const float roadsterVoltageOffset = RoadsterVoltageOffset(commonBatterySoc);
+
+   for (int cell = 0; cell < MebBms::NumCells; cell++)
+   {
+      const float cellVoltage = mebBms.GetCellVoltage(cell);
+      reportedRawVoltages[cell] = cellVoltage < 1000 ? 0 : ReportedRawVoltage(cellVoltage, roadsterVoltageOffset);
    }
 }
 
@@ -509,15 +606,6 @@ void RoadsterBmb::FillFirmwareReply(uint8_t subLo, uint8_t subHi, uint8_t* buf)
 
 void RoadsterBmb::ClearSheet(const SheetParams& params, int alarmReason)
 {
-   Param::SetInt(params.balMinV, 0);
-   Param::SetInt(params.balMinBrick, 0);
-   Param::SetInt(params.balMaxV, 0);
-   Param::SetInt(params.balMaxBrick, 0);
-   Param::SetInt(params.vMin, 0);
-   Param::SetInt(params.vMax, 0);
-   Param::SetInt(params.vSumAvg, 0);
-   Param::SetInt(params.vMinBrick, 0);
-   Param::SetInt(params.vMaxBrick, 0);
    Param::SetInt(params.tMin, 0);
    Param::SetInt(params.tMax, 0);
    Param::SetInt(params.tAvg, 0);
@@ -569,7 +657,7 @@ int RoadsterBmb::RoundToInt(float value)
 
 int RoadsterBmb::RawVoltage(float cellVoltageMv)
 {
-   return RoundToInt(cellVoltageMv * 8.192f);
+   return EncodedRawVoltage(cellVoltageMv);
 }
 
 int RoadsterBmb::RawTemperature(float temperatureDegC)
