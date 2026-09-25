@@ -275,12 +275,9 @@ void MebBms::Balance(bool enable, int& start)
       }
    }
 
-   if (start == 0)
-   {
-      balancingActive = false;
-      for (int group = 0; group < (NumCells / CellsPerCmu); group++)
-         balancingActive |= balancerRunning[group];
-   }
+   balancingActive = false;
+   for (int group = 0; group < (NumCells / CellsPerCmu); group++)
+      balancingActive |= balancerRunning[group];
 }
 
 bool MebBms::Alive(uint32_t time)
