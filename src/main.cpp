@@ -72,12 +72,12 @@ static void Ms100Task(void)
    Param::SetFloat(Param::cpuload, cpuLoad / 10);
    bool balancing = mebBms->Balance(Param::GetBool(Param::balance), balanceCell);
 
+   mebBms->Accumulate();
+   ChaDeMo::UpdateParams(*mebBms);
    canMap->SendAll();
 
    ErrorMessage::SetTime(rtc_get_counter_val());
 
-   mebBms->Accumulate();
-   ChaDeMo::UpdateParams(*mebBms);
    Param::SetFloat(Param::cellvtg_min, mebBms->GetMinCellVoltage());
    Param::SetFloat(Param::cellvtg_max, mebBms->GetMaxCellVoltage());
    Param::SetFloat(Param::cellvtg_avg, mebBms->GetAvgCellVoltage());
