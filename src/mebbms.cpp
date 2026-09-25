@@ -239,20 +239,7 @@ void MebBms::Balance(bool enable, int& start)
    const uint16_t balMin = 3730;
    uint8_t balCmds[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFE, 0xFE, 0xFE, 0xFE };
    bool balance = enable && balCounter < 3;
-   bool balancing = false;
-
-   balancingActive = false;
-   if (balance)
-   {
-      for (int i = 0; i < NumCells; i++)
-      {
-         if ((cellVoltages[i] > (minCellVoltage + balHyst)) && (cellVoltages[i] > balMin))
-         {
-            balancingActive = true;
-            break;
-         }
-      }
-   }
+   bool groupBalancing = false;
 
    if (start == 0)
    {
@@ -267,8 +254,7 @@ void MebBms::Balance(bool enable, int& start)
       const bool balFlag = (cellVoltages[i] > (minCellVoltage + balHyst)) && (cellVoltages[i] > balMin);
 
       balCmds[cell] = balFlag && balance ? 0x8 : 0x0;
-      balancing |= balFlag && balance;
-      balancerRunning[group] = balancing;
+      groupBalancing |= balFlag && balance;
 
       if (cell == 0) balFlags[group] = 0;
       balFlags[group] |= balFlag << cell;
@@ -280,6 +266,7 @@ void MebBms::Balance(bool enable, int& start)
       }
       else if (cell == (CellsPerCmu - 1))
       {
+         balancerRunning[group] = groupBalancing;
          uint32_t canId = (group < 5 ? 0x1A555413 : 0x1A5554A2) + group * 2;
          canHardware->Send(canId, (uint32_t*)&balCmds[8]);
          start = i + 1;
@@ -287,6 +274,10 @@ void MebBms::Balance(bool enable, int& start)
          break;
       }
    }
+
+   balancingActive = false;
+   for (int group = 0; group < (NumCells / CellsPerCmu); group++)
+      balancingActive |= balancerRunning[group];
 }
 
 bool MebBms::Alive(uint32_t time)
