@@ -47,7 +47,7 @@
    3. Display values
  */
 //Next param id (increase when adding new parameter!): 10
-//Next value Id: 2393
+//Next value Id: 2394
 /*              category     name         unit       min     max     default id */
 #define PARAM_LIST \
     PARAM_ENTRY(CAT_COMM,    cdmcurlim,   "A",       0,      255,    255,    3   ) \
@@ -70,6 +70,7 @@
     VALUE_ENTRY(cdm_cur_req,    "A",   2377) \
     VALUE_ENTRY(cdm_soc,        "%",   2378) \
     VALUE_ENTRY(cdm_enabled,    ONOFF, 2379) \
+    VALUE_ENTRY(cdm_charge_added, "As", 2393) \
     VALUE_ENTRY(cdm_chg_max_cur, "A",  2385) \
     VALUE_ENTRY(cdm_chg_cur,     "A",  2386) \
     VALUE_ENTRY(cdm_chg_vtg,     "V",  2387) \

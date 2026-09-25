@@ -344,6 +344,7 @@
     VALUE_ENTRY(cdm_cur_req,    "A",   2377) \
     VALUE_ENTRY(cdm_soc,        "%",   2378) \
     VALUE_ENTRY(cdm_enabled,    ONOFF, 2379) \
+    VALUE_ENTRY(cdm_charge_added, "As", 2393) \
     VALUE_ENTRY(cdm_chg_max_cur, "A",  2385) \
     VALUE_ENTRY(cdm_chg_cur,     "A",  2386) \
     VALUE_ENTRY(cdm_chg_vtg,     "V",  2387) \
