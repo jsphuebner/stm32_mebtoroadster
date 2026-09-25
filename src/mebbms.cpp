@@ -19,6 +19,7 @@
 /* This code is based on Tom's VWBms implementation: https://github.com/Tom-evnut/VW-bms */
 #include "mebbms.h"
 #include "my_math.h"
+#include "params.h"
 
 #define FIRST_VTG_ID    0x1C0
 
@@ -218,6 +219,18 @@ float MebBms::GetRemainingEnergy(float soc)
    }
 
    return energyAtSoc * nominalVoltage * NumCells * GetMaximumAmpHours() / 10000;
+}
+
+void MebBms::PublishVoltageParams() const
+{
+   Param::SetInt(Param::meb_v_min, (int)minCellVoltage);
+   Param::SetInt(Param::meb_v_max, (int)maxCellVoltage);
+   Param::SetInt(Param::meb_v_avg, (int)(totalVoltage / NumCells));
+}
+
+void MebBms::PublishBalancingParam() const
+{
+   Param::SetInt(Param::meb_bal_active, balancingActive);
 }
 
 void MebBms::Balance(bool enable, int& start)

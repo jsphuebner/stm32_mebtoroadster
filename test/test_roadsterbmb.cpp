@@ -450,6 +450,31 @@ static void test_meb_balancing_active_flag()
 }
 
 // ---------------------------------------------------------------------------
+// Test: published MEB parameters reflect current voltage stats and balancing
+// ---------------------------------------------------------------------------
+static void test_meb_param_exports()
+{
+   FillMebVoltages(*canStub, 3800);
+   FillMebVoltageGroup(*canStub, 0x1C0, 3700, 3800, 3900, 4000);
+   mebBms->Accumulate();
+   mebBms->PublishVoltageParams();
+
+   ASSERT(Param::GetInt(Param::meb_v_min) == 3700);
+   ASSERT(Param::GetInt(Param::meb_v_max) == 4000);
+   ASSERT(Param::GetInt(Param::meb_v_avg) == 3800);
+
+   int start = 0;
+   mebBms->Balance(true, start);
+   mebBms->PublishBalancingParam();
+   ASSERT(Param::GetInt(Param::meb_bal_active) == 1);
+
+   start = 0;
+   mebBms->Balance(false, start);
+   mebBms->PublishBalancingParam();
+   ASSERT(Param::GetInt(Param::meb_bal_active) == 0);
+}
+
+// ---------------------------------------------------------------------------
 // Test: voltages below the MEB curve minimum use the same common chemistry
 //       offset as the rest of the pack
 // ---------------------------------------------------------------------------
@@ -674,6 +699,7 @@ REGISTER_TEST(RoadsterBmbTest,
    test_sheet_voltage_params_use_spoofed_curve,
    test_meb_voltage_stats,
    test_meb_balancing_active_flag,
+   test_meb_param_exports,
    test_low_voltage_uses_common_offset,
    test_common_offset_preserves_cell_delta,
    test_high_voltage_above_meb_curve_keeps_raw_encoding,

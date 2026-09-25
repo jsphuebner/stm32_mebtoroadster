@@ -45,6 +45,8 @@ class MebBms : public CanCallback
       float GetMaximumAmpHours() { return maxAh; }
       void SetMaximumAmpHours(float a) { maxAh = a; }
       float GetRemainingEnergy(float soc);
+      void PublishVoltageParams() const;
+      void PublishBalancingParam() const;
       void Balance(bool enable, int& start);
       bool Alive(uint32_t time);
       void Accumulate();

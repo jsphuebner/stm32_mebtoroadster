@@ -111,16 +111,14 @@ static void Ms100Task(void)
    isa->InitializeAndStartIfNeeded();
    CalculateCdmSoc();
    mebBms->Balance(Param::GetBool(Param::balance), balanceCell);
+   mebBms->PublishBalancingParam();
 
    canMap->SendAll();
 
    ErrorMessage::SetTime(rtc_get_counter_val());
 
    mebBms->Accumulate();
-   Param::SetInt(Param::meb_v_min, (int)mebBms->GetMinCellVoltage());
-   Param::SetInt(Param::meb_v_max, (int)mebBms->GetMaxCellVoltage());
-   Param::SetInt(Param::meb_v_avg, (int)mebBms->GetAvgCellVoltage());
-   Param::SetInt(Param::meb_bal_active, mebBms->IsBalancingActive());
+   mebBms->PublishVoltageParams();
    ChaDeMo::UpdateParams(*mebBms, cdmSoc);
 }
 
