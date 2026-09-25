@@ -38,7 +38,7 @@ static const float energyCurveGranularity = 100.0f / (energyCurveTableItems - 1)
 
 MebBms::MebBms(CanHardware* c)
    : canHardware(c), maxCellVoltage(0), minCellVoltage(0), filteredMaxCellVoltage(0), totalVoltage(0), lowTemp(0), highTemp(0),
-     maxAh(148), balCounter(0)
+     maxAh(148), balancingActive(false), balCounter(0)
 {
    for (int i = 0; i < NumCells; i++)
       cellVoltages[i] = 0;
@@ -227,6 +227,19 @@ void MebBms::Balance(bool enable, int& start)
    uint8_t balCmds[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFE, 0xFE, 0xFE, 0xFE };
    bool balance = enable && balCounter < 3;
    bool balancing = false;
+
+   balancingActive = false;
+   if (balance)
+   {
+      for (int i = 0; i < NumCells; i++)
+      {
+         if ((cellVoltages[i] > (minCellVoltage + balHyst)) && (cellVoltages[i] > balMin))
+         {
+            balancingActive = true;
+            break;
+         }
+      }
+   }
 
    if (start == 0)
    {

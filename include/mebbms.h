@@ -37,6 +37,7 @@ class MebBms : public CanCallback
       float GetMinCellVoltage() { return minCellVoltage; }
       float GetMaxCellVoltage() { return maxCellVoltage; }
       float GetAvgCellVoltage() { return totalVoltage / NumCells; }
+      bool IsBalancingActive() const { return balancingActive; }
       float GetTotalVoltage() { return totalVoltage / 1000.0f; }
       float EstimateSocFromVoltage();
       static float LookupSocFromVoltage(float cellVoltageMv);
@@ -71,6 +72,7 @@ class MebBms : public CanCallback
       float maxAh;
       uint32_t lastReceived[NumCells / CellsPerCmu];
       bool balancerRunning[NumCells / CellsPerCmu];
+      bool balancingActive;
       uint8_t balCounter;
       PiController cvControllers[3];
 };

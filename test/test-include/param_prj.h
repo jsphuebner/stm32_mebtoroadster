@@ -47,7 +47,7 @@
    3. Display values
  */
 //Next param id (increase when adding new parameter!): 9
-//Next value Id: 2389
+//Next value Id: 2393
 /*              category     name         unit       min     max     default id */
 #define PARAM_LIST \
     PARAM_ENTRY(CAT_COMM,    canspeed,    CANSPEEDS, 0,      4,      2,      1   ) \
@@ -347,7 +347,11 @@
     VALUE_ENTRY(cdm_chg_max_cur, "A",  2385) \
     VALUE_ENTRY(cdm_chg_cur,     "A",  2386) \
     VALUE_ENTRY(cdm_chg_vtg,     "V",  2387) \
-    VALUE_ENTRY(cdm_chg_status,  "",   2388)
+    VALUE_ENTRY(cdm_chg_status,  "",   2388) \
+    VALUE_ENTRY(meb_v_min,       "mV", 2389) \
+    VALUE_ENTRY(meb_v_max,       "mV", 2390) \
+    VALUE_ENTRY(meb_v_avg,       "mV", 2391) \
+    VALUE_ENTRY(meb_bal_active,  ONOFF, 2392)
 
 
 

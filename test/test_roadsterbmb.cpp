@@ -418,6 +418,38 @@ static void test_sheet_voltage_params_use_spoofed_curve()
 }
 
 // ---------------------------------------------------------------------------
+// Test: MEB-wide min/max/avg voltage accessors report pack statistics
+// ---------------------------------------------------------------------------
+static void test_meb_voltage_stats()
+{
+   FillMebVoltages(*canStub, 3800);
+   FillMebVoltageGroup(*canStub, 0x1C0, 3700, 3800, 3900, 4000);
+   mebBms->Accumulate();
+
+   ASSERT(mebBms->GetMinCellVoltage() == 3700);
+   ASSERT(mebBms->GetMaxCellVoltage() == 4000);
+   ASSERT(mebBms->GetAvgCellVoltage() == 3800);
+}
+
+// ---------------------------------------------------------------------------
+// Test: balancing-active flag reports whether any cell is actively balancing
+// ---------------------------------------------------------------------------
+static void test_meb_balancing_active_flag()
+{
+   FillMebVoltages(*canStub, 3800);
+   FillMebVoltageGroup(*canStub, 0x1C0, 3800, 3800, 3800, 3810);
+   mebBms->Accumulate();
+
+   int start = 0;
+   mebBms->Balance(true, start);
+   ASSERT(mebBms->IsBalancingActive());
+
+   start = 0;
+   mebBms->Balance(false, start);
+   ASSERT(!mebBms->IsBalancingActive());
+}
+
+// ---------------------------------------------------------------------------
 // Test: voltages below the MEB curve minimum use the same common chemistry
 //       offset as the rest of the pack
 // ---------------------------------------------------------------------------
@@ -640,6 +672,8 @@ REGISTER_TEST(RoadsterBmbTest,
    test_cell_avg_reply_on_tenth_0x25,
    test_cell_avg_reply_voltage_values,
    test_sheet_voltage_params_use_spoofed_curve,
+   test_meb_voltage_stats,
+   test_meb_balancing_active_flag,
    test_low_voltage_uses_common_offset,
    test_common_offset_preserves_cell_delta,
    test_high_voltage_above_meb_curve_keeps_raw_encoding,
