@@ -441,11 +441,13 @@ static void test_meb_balancing_active_flag()
    mebBms->Accumulate();
 
    int start = 0;
-   mebBms->Balance(true, start);
+   for (int i = 0; i < 8; i++)
+      mebBms->Balance(true, start);
    ASSERT(mebBms->IsBalancingActive());
 
    start = 0;
-   mebBms->Balance(false, start);
+   for (int i = 0; i < 8; i++)
+      mebBms->Balance(false, start);
    ASSERT(!mebBms->IsBalancingActive());
 }
 
@@ -464,12 +466,14 @@ static void test_meb_param_exports()
    ASSERT(Param::GetInt(Param::meb_v_avg) == 3800);
 
    int start = 0;
-   mebBms->Balance(true, start);
+   for (int i = 0; i < 8; i++)
+      mebBms->Balance(true, start);
    mebBms->PublishBalancingParam();
    ASSERT(Param::GetInt(Param::meb_bal_active) == 1);
 
    start = 0;
-   mebBms->Balance(false, start);
+   for (int i = 0; i < 8; i++)
+      mebBms->Balance(false, start);
    mebBms->PublishBalancingParam();
    ASSERT(Param::GetInt(Param::meb_bal_active) == 0);
 }
