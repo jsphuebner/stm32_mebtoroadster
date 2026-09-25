@@ -109,16 +109,16 @@ static void Ms100Task(void)
    //This sets a fixed point value WITHOUT calling the parm_Change() function
    Param::SetFloat(Param::cpuload, cpuLoad / 10);
    isa->InitializeAndStartIfNeeded();
+   mebBms->Accumulate();
    CalculateCdmSoc();
    mebBms->Balance(Param::GetBool(Param::balance), balanceCell);
+   mebBms->PublishVoltageParams();
    mebBms->PublishBalancingParam();
 
    canMap->SendAll();
 
    ErrorMessage::SetTime(rtc_get_counter_val());
 
-   mebBms->Accumulate();
-   mebBms->PublishVoltageParams();
    ChaDeMo::UpdateParams(*mebBms, cdmSoc);
 }
 
