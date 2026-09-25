@@ -247,6 +247,12 @@ void MebBms::Balance(bool enable, int& start)
       balCounter &= 0x3;
    }
 
+   if (!enable)
+   {
+      for (int group = 0; group < (NumCells / CellsPerCmu); group++)
+         balancerRunning[group] = false;
+   }
+
    for (int i = start; i < NumCells; i++)
    {
       const int group = i / CellsPerCmu;
