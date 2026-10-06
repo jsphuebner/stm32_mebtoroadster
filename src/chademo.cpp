@@ -25,6 +25,10 @@ uint8_t ChaDeMo::chargerMaxCurrent;
 uint16_t ChaDeMo::chargerOutputVoltage;
 uint8_t ChaDeMo::chargerOutputCurrent;
 uint8_t ChaDeMo::chargerStatus;
+float ChaDeMo::estimatedSoc;
+float ChaDeMo::chargeAddedAs;
+uint16_t ChaDeMo::noCurrentTicks;
+bool ChaDeMo::chargeSessionActive;
 
 ChaDeMo::ChaDeMo(CanHardware* hw)
 {
@@ -41,6 +45,11 @@ void ChaDeMo::HandleClear()
    chargerOutputVoltage = 0;
    chargerOutputCurrent = 0;
    chargerStatus = 0;
+   estimatedSoc = 0;
+   chargeAddedAs = 0;
+   noCurrentTicks = 0;
+   chargeSessionActive = false;
+   ResetParams();
 }
 
 void ChaDeMo::HandleRx(uint32_t canId, uint32_t data[2], uint8_t)
@@ -97,9 +106,56 @@ void ChaDeMo::CheckAndRestoreCanMap(CanMap* canMap)
    }
 }
 
-void ChaDeMo::UpdateParams(MebBms& mebBms, float soc)
+void ChaDeMo::ResetParams()
 {
-   soc = MIN(100.0f, MAX(0.0f, soc));
+   Param::SetFloat(Param::cdm_bat_vtg, 0);
+   Param::SetFloat(Param::cdm_target_vtg, 0);
+   Param::SetFloat(Param::cdm_soc, 0);
+   Param::SetFloat(Param::cdm_charge_added, 0);
+   Param::SetInt(Param::cdm_enabled, 0);
+   Param::SetInt(Param::cdm_cur_req, 0);
+   Param::SetInt(Param::cdm_chg_max_cur, 0);
+   Param::SetInt(Param::cdm_chg_cur, 0);
+   Param::SetInt(Param::cdm_chg_vtg, 0);
+   Param::SetInt(Param::cdm_chg_status, 0);
+}
+
+void ChaDeMo::UpdateParams(MebBms& mebBms)
+{
+   if (chargerStatus == 0)
+   {
+      chargeAddedAs = 0;
+      noCurrentTicks = 0;
+      chargeSessionActive = false;
+      ResetParams();
+      return;
+   }
+
+   if (!chargeSessionActive)
+   {
+      estimatedSoc = MIN(100.0f, MAX(0.0f, mebBms.EstimateSocFromVoltage()));
+      chargeAddedAs = 0;
+      noCurrentTicks = 0;
+      chargeSessionActive = true;
+   }
+
+   if (chargerOutputCurrent > 0)
+   {
+      chargeAddedAs += chargerOutputCurrent * 0.1f;
+      noCurrentTicks = 0;
+   }
+   else if (noCurrentTicks < UINT16_MAX)
+   {
+      noCurrentTicks++;
+   }
+
+   if (noCurrentTicks >= 1800)
+   {
+      estimatedSoc = MIN(100.0f, MAX(0.0f, mebBms.EstimateSocFromVoltage()));
+      chargeAddedAs = 0;
+   }
+
+   const float soc = MIN(100.0f, MAX(0.0f, estimatedSoc + (100.0f * (chargeAddedAs / 3600.0f) / MAX(1.0f, mebBms.GetMaximumAmpHours()))));
    const float cellMaxVoltage = Param::GetFloat(Param::cellmax);
    const float batteryMaxCurrent = mebBms.GetMaximumChargeCurrent(cellMaxVoltage);
    const float userLimitCurrent = Param::GetFloat(Param::cdmcurlim);
@@ -110,6 +166,7 @@ void ChaDeMo::UpdateParams(MebBms& mebBms, float soc)
    Param::SetFloat(Param::cdm_bat_vtg, mebBms.GetTotalVoltage());
    Param::SetFloat(Param::cdm_target_vtg, targetVoltage);
    Param::SetFloat(Param::cdm_soc, soc);
+   Param::SetFloat(Param::cdm_charge_added, chargeAddedAs);
    Param::SetInt(Param::cdm_enabled, soc < 100.0f);
    Param::SetInt(Param::cdm_cur_req, (int)chargeRequest);
 

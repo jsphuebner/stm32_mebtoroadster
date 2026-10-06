@@ -54,13 +54,13 @@ MebBms::MebBms(CanHardware* c)
    cvControllers[0].SetRef(FP_FROMINT(3950));
    cvControllers[1].SetRef(FP_FROMINT(4050));
    cvControllers[2].SetRef(FP_FROMINT(4200));
-   SetControllerGains(3, 3);
+   SetControllerGains(3, 3, 3);
 
    canHardware->AddCallback(this);
    HandleClear();
 }
 
-void MebBms::SetControllerGains(int kp, int ki)
+void MebBms::SetControllerGains(int kp, int ki, uint8_t cellFlt)
 {
    for (int i = 0; i < 3; i++)
    {
@@ -68,6 +68,7 @@ void MebBms::SetControllerGains(int kp, int ki)
       cvControllers[i].SetCallingFrequency(10);
       cvControllers[i].ResetIntegrator();
    }
+   cellVtgFilter = cellFlt;
 }
 
 void MebBms::HandleClear()
@@ -334,5 +335,5 @@ void MebBms::SetCellVoltage(int idx, int vtg)
    if (cellVoltages[idx] == 0)
       cellVoltages[idx] = vtg;
    else
-      cellVoltages[idx] = IIRFILTERF(cellVoltages[idx], (float)vtg, 2);
+      cellVoltages[idx] = IIRFILTERF(cellVoltages[idx], (float)vtg, cellVtgFilter);
 }

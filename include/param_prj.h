@@ -39,24 +39,25 @@
  */
 
  //Define a version string of your firmware here
-#define VER 1.07.R
+#define VER 1.08.R
 
 /* Entries must be ordered as follows:
    1. Saveable parameters (id != 0)
    2. Temporary parameters (id = 0)
    3. Display values
  */
-//Next param id (increase when adding new parameter!): 10
-//Next value Id: 2393
+//Next param id (increase when adding new parameter!): 11
+//Next value Id: 2394
 /*              category     name         unit       min     max     default id */
 #define PARAM_LIST \
     PARAM_ENTRY(CAT_COMM,    cdmcurlim,   "A",       0,      255,    255,    3   ) \
-    PARAM_ENTRY(CAT_BMS,     balance,     ONOFF,     0,      1,      0,      9   ) \
+    PARAM_ENTRY(CAT_BMS,     balance,     ONOFF,     0,      1,      1,      9   ) \
     PARAM_ENTRY(CAT_BMS,     cellmin,     "mV",      2500,   3600,   3380,   4   ) \
     PARAM_ENTRY(CAT_BMS,     cellmax,     "mV",      4000,   4300,   4200,   5   ) \
     PARAM_ENTRY(CAT_BMS,     ahmax,       "Ah",      10,     200,    148,    6   ) \
     PARAM_ENTRY(CAT_BMS,     chargekp,    "",        0,      200,    3,      7   ) \
     PARAM_ENTRY(CAT_BMS,     chargeki,    "",        0,      200,    3,      8   ) \
+    PARAM_ENTRY(CAT_BMS,     cellvtgfilter,"",       0,      10,     3,      10  ) \
     PARAM_ENTRY(CAT_TEST,    testparam,   "Hz",      -100,   1000,   0,      0   ) \
     VALUE_ENTRY(opmode,      OPMODES, 2000 ) \
     VALUE_ENTRY(version,     VERSTR,  2001 ) \
@@ -70,6 +71,7 @@
     VALUE_ENTRY(cdm_cur_req,    "A",   2377) \
     VALUE_ENTRY(cdm_soc,        "%",   2378) \
     VALUE_ENTRY(cdm_enabled,    ONOFF, 2379) \
+    VALUE_ENTRY(cdm_charge_added, "As", 2393) \
     VALUE_ENTRY(cdm_chg_max_cur, "A",  2385) \
     VALUE_ENTRY(cdm_chg_cur,     "A",  2386) \
     VALUE_ENTRY(cdm_chg_vtg,     "V",  2387) \
