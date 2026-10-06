@@ -100,8 +100,9 @@ void Param::Change(Param::PARAM_NUM paramNum)
       break;
    case Param::chargekp:
    case Param::chargeki:
+   case Param::cellvtgfilter:
       if (nullptr != mebBms)
-         mebBms->SetControllerGains(Param::GetInt(Param::chargekp), Param::GetInt(Param::chargeki));
+         mebBms->SetControllerGains(Param::GetInt(Param::chargekp), Param::GetInt(Param::chargeki), Param::GetInt(Param::cellvtgfilter));
       break;
    default:
       //Handle general parameter changes here. Add paramNum labels for handling specific parameters
@@ -149,7 +150,7 @@ int main(void)
    mebBms = &meb;
    roadsterBmb = &roadster;
    mebBms->SetMaximumAmpHours(Param::GetFloat(Param::ahmax));
-   mebBms->SetControllerGains(Param::GetInt(Param::chargekp), Param::GetInt(Param::chargeki));
+   mebBms->SetControllerGains(Param::GetInt(Param::chargekp), Param::GetInt(Param::chargeki), Param::GetInt(Param::cellvtgfilter));
 
    //Restore default CHaDeMo CAN mappings if user erased them
    ChaDeMo::CheckAndRestoreCanMap(&cm);

@@ -28,7 +28,7 @@ class MebBms : public CanCallback
       MebBms(CanHardware* c);
       void HandleRx(uint32_t canId, uint32_t data[2], uint8_t dlc) override;
       void HandleClear() override;
-      void SetControllerGains(int kp, int ki);
+      void SetControllerGains(int kp, int ki, uint8_t cellFlt);
       uint16_t GetCellVoltage(int idx) const { return cellVoltages[idx]; }
       float GetModuleTemperature(int idx) const { return temps[idx]; }
       bool GetBalanceFlag(int idx) { return (balFlags[idx / CellsPerCmu] & 1 << (idx % CellsPerCmu)) > 0; }
@@ -72,6 +72,7 @@ class MebBms : public CanCallback
       uint32_t lastReceived[NumCells / CellsPerCmu];
       bool balancerRunning[NumCells / CellsPerCmu];
       uint8_t balCounter;
+      uint8_t cellVtgFilter;
       PiController cvControllers[3];
 };
 
