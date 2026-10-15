@@ -58,7 +58,6 @@
     PARAM_ENTRY(CAT_BMS,     chargekp,    "",        0,      200,    3,      7   ) \
     PARAM_ENTRY(CAT_BMS,     chargeki,    "",        0,      200,    3,      8   ) \
     PARAM_ENTRY(CAT_BMS,     cellvtgfilter,"",       0,      10,     4,      10  ) \
-    PARAM_ENTRY(CAT_TEST,    testparam,   "Hz",      -100,   1000,   0,      0   ) \
     VALUE_ENTRY(opmode,      OPMODES, 2000 ) \
     VALUE_ENTRY(version,     VERSTR,  2001 ) \
     VALUE_ENTRY(lasterr,     errorListString,  2002 ) \
@@ -331,7 +330,7 @@
 #define CAT_COMM     "Communication"
 #define CAT_BMS      "BMS"
 
-#define VERSTR STRINGIFY(4=VER-name)
+#define VERSTR STRINGIFY(4=VER)
 
 /***** enums ******/
 
